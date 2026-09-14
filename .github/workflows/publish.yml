@@ -1,0 +1,20 @@
+name: Publish
+on:
+  release:
+    types: [published]
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Pack the NuGet package
+        run: dotnet pack CookieMunch/CookieMunch.csproj -c Release -o ./artifacts
+      - name: Push to NuGet.org
+        run: >
+          dotnet nuget push "./artifacts/*.nupkg"
+          --api-key ${{ secrets.NUGET_API_TOKEN }}
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate

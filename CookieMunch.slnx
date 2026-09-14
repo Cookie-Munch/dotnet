@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="CookieMunch.Tests/CookieMunch.Tests.csproj" />
+  <Project Path="CookieMunch/CookieMunch.csproj" />
+</Solution>
