@@ -88,6 +88,14 @@ public sealed class SitesResource : ResourceBase
         Client.SendAsync<FlowOpResponse>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/flow", config, ct);
 
     /// <summary>
+    /// Read a cookie declaration exported from another CMP and translate its categories into
+    /// ours (POST /v1/sites/:cbid/import). Nothing is applied — their vocabulary is not ours,
+    /// so the result comes back for review.
+    /// </summary>
+    public Task<JsonObject> ImportDeclarationAsync(string cbid, string data, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/import", new { data }, ct);
+
+    /// <summary>
     /// Pages where the embed could not load its banner renderer (GET /v1/sites/:cbid/blocked).
     /// The host page's Content Security Policy or Trusted Types policy refused it, so nobody
     /// there can be asked for consent. An empty list is the healthy answer.

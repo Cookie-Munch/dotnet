@@ -15,6 +15,18 @@ namespace CookieMunch;
 // Open, deeply-nested config objects owned by @cookiemunch/core are modelled as
 // System.Text.Json.Nodes.JsonObject directly in method signatures.
 
+/// <summary>
+/// A language the banner already has copy for (GET /v1/languages). <c>Source</c> is
+/// "bundled" (ships in consent.js) or "extended" (ships in the renderer, fetched the
+/// first time a banner is drawn); <c>Rtl</c> languages flip the banner's layout.
+/// </summary>
+public sealed record SupportedLanguage(
+    [property: JsonPropertyName("code")] string Code,
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("endonym")] string Endonym,
+    [property: JsonPropertyName("rtl")] bool Rtl,
+    [property: JsonPropertyName("source")] string Source);
+
 /// <summary>Identity / echo for SDK bootstrapping (GET /v1/me).</summary>
 public sealed record Identity(
     [property: JsonPropertyName("orgId")] string OrgId,

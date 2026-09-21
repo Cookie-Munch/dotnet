@@ -132,6 +132,13 @@ public sealed class CookieMunchClient : IDisposable
     public Task<Identity> MeAsync(CancellationToken ct = default) =>
         SendAsync<Identity>(HttpMethod.Get, "/v1/me", null, ct);
 
+    /// <summary>
+    /// The languages the banner already has copy for (GET /v1/languages). Diff it against
+    /// your visitors' locales to find the ones you still have to write.
+    /// </summary>
+    public Task<List<SupportedLanguage>> LanguagesAsync(CancellationToken ct = default) =>
+        SendAsync<List<SupportedLanguage>>(HttpMethod.Get, "/v1/languages", null, ct);
+
     /// <summary>Current resource usage for the org (GET /v1/usage).</summary>
     public Task<Usage> UsageAsync(CancellationToken ct = default) =>
         SendAsync<Usage>(HttpMethod.Get, "/v1/usage", null, ct);
