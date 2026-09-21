@@ -16,7 +16,7 @@
     <PackageId>CookieMunch</PackageId>
     <Version>0.1.0</Version>
     <Authors>Cookie Munch</Authors>
-    <Description>Official .NET client for the Cookie Munch Developer API — a self-hosted Consent Management Platform. Covers the /v1 surface (sites, consent, DSAR, vendors, RoPA, brand kits, preferences, members, banners) plus the public consent-log ingest endpoint.</Description>
+    <Description>Official .NET client for the Cookie Munch Developer API — a Consent Management Platform. Covers the /v1 surface (sites, consent, DSAR, vendors, RoPA, brand kits, preferences, members, banners) plus the public consent-log ingest endpoint.</Description>
     <PackageTags>cookiemunch;consent;cmp;gdpr;privacy;cookies</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>

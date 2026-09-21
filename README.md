@@ -1,7 +1,7 @@
 # CookieMunch .NET SDK
 
 A typed, dependency-free .NET client for the [Cookie Munch](https://cookiemunch.net) Developer
-API — a self-hosted Consent Management Platform. It covers every operation of the `/v1`
+API — a Consent Management Platform. It covers every operation of the `/v1`
 Developer API plus the public **consent-log ingest** endpoint, which is handy for logging
 consent from desktop apps (WPF / WinUI / MAUI) that render their own consent UI.
 

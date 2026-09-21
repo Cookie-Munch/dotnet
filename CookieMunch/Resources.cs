@@ -482,4 +482,15 @@ public sealed class AssetsResource : ResourceBase
             HttpMethod.Post, "/v1/assets", new { data = Convert.ToBase64String(data), contentType }, ct).ConfigureAwait(false);
         return body["url"]?.GetValue<string>() ?? "";
     }
+
+    /// <summary>
+    /// Delete a stored image (DELETE /v1/assets/{fileName}). Pass the URL
+    /// <see cref="UploadAsync"/> returned, or just its file name. Only this organisation's
+    /// images are reachable: the folder comes from the API key, not from the name sent.
+    /// </summary>
+    public Task DeleteAsync(string urlOrFileName, CancellationToken ct = default)
+    {
+        var name = urlOrFileName[(urlOrFileName.LastIndexOf('/') + 1)..];
+        return Client.SendAsync(HttpMethod.Delete, $"/v1/assets/{CookieMunchClient.Enc(name)}", null, ct);
+    }
 }
