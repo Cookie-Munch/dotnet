@@ -87,6 +87,14 @@ public sealed class SitesResource : ResourceBase
     public Task<FlowOpResponse> SetFlowAsync(string cbid, JsonObject config, CancellationToken ct = default) =>
         Client.SendAsync<FlowOpResponse>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/flow", config, ct);
 
+    /// <summary>
+    /// Pages where the embed could not load its banner renderer (GET /v1/sites/:cbid/blocked).
+    /// The host page's Content Security Policy or Trusted Types policy refused it, so nobody
+    /// there can be asked for consent. An empty list is the healthy answer.
+    /// </summary>
+    public Task<JsonObject> BlockedAsync(string cbid, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/blocked", null, ct);
+
     /// <summary>Which banner design the site uses (GET /v1/sites/:cbid/banner). <c>bannerId</c> is null when none is assigned.</summary>
     public Task<JsonObject> BannerAsync(string cbid, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/banner", null, ct);
