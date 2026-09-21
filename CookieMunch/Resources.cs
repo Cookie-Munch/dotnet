@@ -86,6 +86,33 @@ public sealed class SitesResource : ResourceBase
     /// <summary>Wholesale-replace the flow with a full v2 config (PUT /v1/sites/:cbid/flow). Check <see cref="FlowOpResponse.Ok"/>.</summary>
     public Task<FlowOpResponse> SetFlowAsync(string cbid, JsonObject config, CancellationToken ct = default) =>
         Client.SendAsync<FlowOpResponse>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/flow", config, ct);
+
+    /// <summary>Which banner design the site uses (GET /v1/sites/:cbid/banner). <c>bannerId</c> is null when none is assigned.</summary>
+    public Task<JsonObject> BannerAsync(string cbid, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/banner", null, ct);
+
+    /// <summary>The site's privacy and cookie policy, as Markdown (GET /v1/sites/:cbid/policy).</summary>
+    public Task<string> PolicyAsync(string cbid, PolicyOptions? options = null, CancellationToken ct = default) =>
+        Client.SendRawAsync(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/policy" + CookieMunchClient.BuildQuery(
+            ("contactEmail", options?.ContactEmail),
+            ("effectiveDate", options?.EffectiveDate),
+            ("jurisdictions", options?.Jurisdictions is null ? null : string.Join(",", options.Jurisdictions))), null, ct);
+
+    /// <summary>Add or remove the separate personalised-ads choice on the site's banner (POST /v1/sites/:cbid/elements/ad-personalization).</summary>
+    public Task<JsonObject> SetAdPersonalizationAsync(string cbid, AdPersonalizationInput input, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/elements/ad-personalization", input, ct);
+
+    /// <summary>Which trackers fired after opt-out in a captured session, and what personal data left the page (POST /v1/sites/:cbid/sentry).</summary>
+    public Task<JsonObject> AnalyzeSessionAsync(string cbid, SessionAnalysisInput input, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/sentry", input, ct);
+
+    /// <summary>Exactly what to publish to prove control of the domain, per method (GET /v1/sites/:cbid/verify/challenge).</summary>
+    public Task<JsonObject> VerifyChallengeAsync(string cbid, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/verify/challenge", null, ct);
+
+    /// <summary>Create up to 100 sites (POST /v1/sites/bulk). Partial success: each result reports <c>ok</c> or its own error.</summary>
+    public Task<JsonObject> CreateBulkAsync(List<BulkSite> sites, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/sites/bulk", new { sites }, ct);
 }
 
 /// <summary>Internal wrapper for the CookieDeclaration response.</summary>
@@ -159,6 +186,27 @@ public sealed class DsarResource : ResourceBase
     /// <summary>Advance a DSAR to a new status (POST /v1/dsar/:id/advance). Use the <see cref="DsarStatus"/> constants.</summary>
     public Task<DsarResponse> AdvanceAsync(string id, string toStatus, CancellationToken ct = default) =>
         Client.SendAsync<DsarResponse>(HttpMethod.Post, $"/v1/dsar/{CookieMunchClient.Enc(id)}/advance", new { toStatus }, ct);
+
+    /// <summary>The subject-facing response notice for a request, as plain text (GET /v1/dsar/:id/response).</summary>
+    public Task<string> ResponseAsync(string id, CancellationToken ct = default) =>
+        Client.SendRawAsync(HttpMethod.Get, $"/v1/dsar/{CookieMunchClient.Enc(id)}/response", null, ct);
+
+    /// <summary>
+    /// Erase a subject's consent records on one site, for a deletion request (POST /v1/dsar/:id/erase).
+    /// The server refuses unless the request is a deletion past identity verification, and notes the
+    /// erasure on it. Irreversible. Needs dsar:write and consent:write. Check
+    /// <see cref="DsarEraseResult.Warning"/>: when set, no KEK is configured and nothing was erased.
+    /// </summary>
+    public Task<DsarEraseResult> EraseAsync(string id, string cbid, string stamp, CancellationToken ct = default) =>
+        Client.SendAsync<DsarEraseResult>(HttpMethod.Post, $"/v1/dsar/{CookieMunchClient.Enc(id)}/erase", new { cbid, stamp }, ct);
+
+    /// <summary>
+    /// A subject's consent records on one site, for an access or portability request past identity
+    /// verification (POST /v1/dsar/:id/export). The export is noted on the request. Needs dsar:write
+    /// and consent:read.
+    /// </summary>
+    public Task<DsarExportResult> ExportAsync(string id, string cbid, string stamp, CancellationToken ct = default) =>
+        Client.SendAsync<DsarExportResult>(HttpMethod.Post, $"/v1/dsar/{CookieMunchClient.Enc(id)}/export", new { cbid, stamp }, ct);
 }
 
 /// <summary>Third-party vendors + risk scoring.</summary>
@@ -187,6 +235,10 @@ public sealed class RopaResource : ResourceBase
     /// <summary>Create a RoPA entry (POST /v1/ropa).</summary>
     public Task<RopaCreateResult> CreateAsync(RopaInput input, CancellationToken ct = default) =>
         Client.SendAsync<RopaCreateResult>(HttpMethod.Post, "/v1/ropa", input, ct);
+
+    /// <summary>The org's RoPA (GDPR Art. 30), as CSV (GET /v1/ropa/export.csv).</summary>
+    public Task<string> ExportCsvAsync(CancellationToken ct = default) =>
+        Client.SendRawAsync(HttpMethod.Get, "/v1/ropa/export.csv", null, ct);
 }
 
 /// <summary>Reusable, org-level banner themes.</summary>
@@ -219,6 +271,13 @@ public sealed class PreferencesResource : ResourceBase
     /// <summary>Save a subject's purposes (POST /v1/preferences).</summary>
     public Task<JsonNode> SaveAsync(string subjectId, IReadOnlyDictionary<string, bool> purposes, CancellationToken ct = default) =>
         Client.SendAsync<JsonNode>(HttpMethod.Post, "/v1/preferences", new { subjectId, purposes }, ct);
+
+    /// <summary>
+    /// One subject's record (GET /v1/preferences/:subjectId). A subject with nothing saved comes
+    /// back with empty purposes. Needs consent:read.
+    /// </summary>
+    public Task<JsonNode> GetAsync(string subjectId, CancellationToken ct = default) =>
+        Client.SendAsync<JsonNode>(HttpMethod.Get, $"/v1/preferences/{CookieMunchClient.Enc(subjectId)}", null, ct);
 }
 
 /// <summary>Org members.</summary>
@@ -255,6 +314,33 @@ public sealed class KeysResource : ResourceBase
     /// <summary>Issue a new API key (POST /v1/keys). The <see cref="ApiKey.Key"/> is returned ONCE.</summary>
     public Task<ApiKey> IssueAsync(string? name = null, CancellationToken ct = default) =>
         Client.SendAsync<ApiKey>(HttpMethod.Post, "/v1/keys", name is null ? new { } : new { name }, ct);
+
+    /// <summary>
+    /// Issue a least-privilege key (POST /v1/keys): <paramref name="input"/> may carry scopes,
+    /// cbids (a property lock — the key then works only on those sites and on no org-wide
+    /// endpoint) and an expiry. The <see cref="ApiKey.Key"/> is returned ONCE.
+    /// </summary>
+    public Task<ApiKey> IssueAsync(ApiKeyIssueInput input, CancellationToken ct = default) =>
+        Client.SendAsync<ApiKey>(HttpMethod.Post, "/v1/keys", input, ct);
+
+    /// <summary>Revoke a key by its prefix (DELETE /v1/keys/:prefix). Immediate.</summary>
+    public Task RevokeAsync(string prefix, CancellationToken ct = default) =>
+        Client.SendAsync(HttpMethod.Delete, $"/v1/keys/{CookieMunchClient.Enc(prefix)}", null, ct);
+
+    /// <summary>
+    /// Rotate a key (POST /v1/keys/:prefix/roll). The new <see cref="ApiKey.Key"/> is returned
+    /// ONCE and keeps the old key's name, scopes, property lock and expiry; the old secret stops
+    /// working immediately — including this client's, if it is the one being rolled.
+    /// </summary>
+    public Task<ApiKey> RollAsync(string prefix, CancellationToken ct = default) =>
+        Client.SendAsync<ApiKey>(HttpMethod.Post, $"/v1/keys/{CookieMunchClient.Enc(prefix)}/roll", null, ct);
+
+    /// <summary>
+    /// Rename a key, or replace its scopes or property lock (PATCH /v1/keys/:prefix). Only the
+    /// fields set on <paramref name="patch"/> are sent; the secret is unchanged.
+    /// </summary>
+    public Task<JsonObject> UpdateAsync(string prefix, ApiKeyUpdate patch, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Patch, $"/v1/keys/{CookieMunchClient.Enc(prefix)}", patch, ct);
 }
 
 /// <summary>Webhook subscriptions.</summary>
@@ -273,6 +359,50 @@ public sealed class WebhooksResource : ResourceBase
     /// <summary>Delete a webhook subscription (DELETE /v1/webhooks/:id).</summary>
     public Task DeleteAsync(string id, CancellationToken ct = default) =>
         Client.SendAsync(HttpMethod.Delete, $"/v1/webhooks/{CookieMunchClient.Enc(id)}", null, ct);
+
+    /// <summary>
+    /// Change or pause a subscription (PATCH /v1/webhooks/:id). <paramref name="patch"/> is sent
+    /// as-is: <c>["active"] = false</c> pauses it, and <c>["cbid"] = null</c> widens it to every
+    /// property in the org — a <see cref="JsonObject"/> keeps that null, where a record would drop it.
+    /// </summary>
+    public Task<JsonObject> UpdateAsync(string id, JsonObject patch, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Patch, $"/v1/webhooks/{CookieMunchClient.Enc(id)}", patch, ct);
+
+    /// <summary>
+    /// Rotate a subscription's signing secret (POST /v1/webhooks/:id/roll). The new secret is
+    /// returned once; deliveries are signed with it from now on, so update the receiving endpoint.
+    /// </summary>
+    public async Task<string> RollSecretAsync(string id, CancellationToken ct = default)
+    {
+        var body = await Client.SendAsync<JsonObject>(
+            HttpMethod.Post, $"/v1/webhooks/{CookieMunchClient.Enc(id)}/roll", null, ct).ConfigureAwait(false);
+        return body["secret"]?.GetValue<string>() ?? "";
+    }
+
+    /// <summary>Send a signed test event now and report what the endpoint answered (POST /v1/webhooks/:id/test).</summary>
+    public Task<WebhookTestResult> TestAsync(string id, CancellationToken ct = default) =>
+        Client.SendAsync<WebhookTestResult>(HttpMethod.Post, $"/v1/webhooks/{CookieMunchClient.Enc(id)}/test", null, ct);
+
+    /// <summary>
+    /// Deliveries that failed every retry, newest first (GET /v1/webhooks/dead-letters).
+    /// A property-locked key sees only its own properties'.
+    /// </summary>
+    public async Task<List<WebhookDeadLetter>> DeadLettersAsync(CancellationToken ct = default)
+    {
+        var body = await Client.SendAsync<DeadLetterList>(
+            HttpMethod.Get, "/v1/webhooks/dead-letters", null, ct).ConfigureAwait(false);
+        return body.DeadLetters;
+    }
+
+    /// <summary>Deliver a dead-lettered event again, to the subscription as it is now (POST /v1/webhooks/dead-letters/:id/replay).</summary>
+    public Task<JsonObject> ReplayDeadLetterAsync(string id, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/webhooks/dead-letters/{CookieMunchClient.Enc(id)}/replay", null, ct);
+
+    private sealed record DeadLetterList
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("deadLetters")]
+        public List<WebhookDeadLetter> DeadLetters { get; init; } = new();
+    }
 }
 
 /// <summary>Reusable account-level banner designs.</summary>
@@ -312,4 +442,44 @@ public sealed class BannersResource : ResourceBase
     /// <summary>Compile the design into every assigned site's config (POST /v1/banners/:id/publish).</summary>
     public Task<BannerPublishResult> PublishAsync(string id, CancellationToken ct = default) =>
         Client.SendAsync<BannerPublishResult>(HttpMethod.Post, $"/v1/banners/{CookieMunchClient.Enc(id)}/publish", null, ct);
+}
+
+/// <summary>
+/// The key's own organisation (/v1/org). Requires an unscoped key that is not property-locked.
+/// Deleting an organisation is deliberately not part of the API: it stays a signed-in owner's act.
+/// </summary>
+public sealed class OrgResource : ResourceBase
+{
+    internal OrgResource(CookieMunchClient client) : base(client) { }
+
+    /// <summary>The organisation: id, name, plan and logo (GET /v1/org).</summary>
+    public Task<Org> GetAsync(CancellationToken ct = default) =>
+        Client.SendAsync<Org>(HttpMethod.Get, "/v1/org", null, ct);
+
+    /// <summary>
+    /// Rename the organisation and/or set its logo (PATCH /v1/org). <paramref name="patch"/> is sent
+    /// as-is: <c>["logoUrl"] = null</c> REMOVES the logo, while leaving the key out leaves the logo
+    /// alone — a <see cref="JsonObject"/> keeps that null, where a record would drop it and silently
+    /// turn "take it down" into "leave it".
+    /// </summary>
+    public Task<Org> UpdateAsync(JsonObject patch, CancellationToken ct = default) =>
+        Client.SendAsync<Org>(HttpMethod.Patch, "/v1/org", patch, ct);
+}
+
+/// <summary>Images used by banners (/v1/assets).</summary>
+public sealed class AssetsResource : ResourceBase
+{
+    internal AssetsResource(CookieMunchClient client) : base(client) { }
+
+    /// <summary>
+    /// Store an image and get its public URL (POST /v1/assets) — for a banner's logo or
+    /// <see cref="OrgResource.UpdateAsync"/>. PNG, JPEG, WebP, GIF or SVG, up to 1,000,000 bytes;
+    /// the bytes are base64-encoded here. Needs sites:write.
+    /// </summary>
+    public async Task<string> UploadAsync(byte[] data, string contentType, CancellationToken ct = default)
+    {
+        var body = await Client.SendAsync<JsonObject>(
+            HttpMethod.Post, "/v1/assets", new { data = Convert.ToBase64String(data), contentType }, ct).ConfigureAwait(false);
+        return body["url"]?.GetValue<string>() ?? "";
+    }
 }

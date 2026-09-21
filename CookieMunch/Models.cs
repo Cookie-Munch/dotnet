@@ -392,6 +392,81 @@ public sealed record ApiKey
     [JsonPropertyName("key")] public string? Key { get; init; }
 }
 
+/// <summary>The key's organisation (GET /v1/org).</summary>
+public sealed record Org
+{
+    [JsonPropertyName("id")] public string Id { get; init; } = "";
+    [JsonPropertyName("name")] public string Name { get; init; } = "";
+    [JsonPropertyName("plan")] public string Plan { get; init; } = "";
+    /// <summary>Null when the org has no logo.</summary>
+    [JsonPropertyName("logoUrl")] public string? LogoUrl { get; init; }
+}
+
+/// <summary>Rename a key, or replace its scopes or property lock. Omitted fields are unchanged.</summary>
+public sealed record ApiKeyUpdate
+{
+    [JsonPropertyName("name")] public string? Name { get; init; }
+    [JsonPropertyName("scopes")] public IReadOnlyList<string>? Scopes { get; init; }
+    [JsonPropertyName("cbids")] public IReadOnlyList<string>? Cbids { get; init; }
+}
+
+/// <summary>One entry in the org's audit log.</summary>
+public sealed record AuditEntry
+{
+    [JsonPropertyName("id")] public string Id { get; init; } = "";
+    [JsonPropertyName("orgId")] public string OrgId { get; init; } = "";
+    /// <summary>Actions taken with an API key are attributed to <c>apikey:&lt;prefix&gt;</c>.</summary>
+    [JsonPropertyName("actorUserId")] public string ActorUserId { get; init; } = "";
+    [JsonPropertyName("actorEmail")] public string? ActorEmail { get; init; }
+    [JsonPropertyName("action")] public string Action { get; init; } = "";
+    [JsonPropertyName("target")] public string? Target { get; init; }
+    [JsonPropertyName("at")] public long At { get; init; }
+    [JsonPropertyName("meta")] public JsonObject? Meta { get; init; }
+}
+
+/// <summary>A webhook delivery that failed every retry. Replay it by <see cref="Id"/>.</summary>
+public sealed record WebhookDeadLetter
+{
+    [JsonPropertyName("id")] public string Id { get; init; } = "";
+    [JsonPropertyName("orgId")] public string OrgId { get; init; } = "";
+    [JsonPropertyName("subscriptionId")] public string SubscriptionId { get; init; } = "";
+    [JsonPropertyName("url")] public string Url { get; init; } = "";
+    [JsonPropertyName("eventType")] public string EventType { get; init; } = "";
+    [JsonPropertyName("cbid")] public string? Cbid { get; init; }
+    [JsonPropertyName("payload")] public JsonNode? Payload { get; init; }
+    [JsonPropertyName("attempts")] public int Attempts { get; init; }
+    [JsonPropertyName("lastStatus")] public int? LastStatus { get; init; }
+    [JsonPropertyName("lastError")] public string? LastError { get; init; }
+    [JsonPropertyName("failedAt")] public long FailedAt { get; init; }
+}
+
+/// <summary>What a test delivery's endpoint answered.</summary>
+public sealed record WebhookTestResult
+{
+    [JsonPropertyName("ok")] public bool Ok { get; init; }
+    [JsonPropertyName("status")] public int? Status { get; init; }
+    [JsonPropertyName("error")] public string? Error { get; init; }
+}
+
+/// <summary>Result of erasing a subject's consent for a deletion request.</summary>
+public sealed record DsarEraseResult
+{
+    [JsonPropertyName("erased")] public int Erased { get; init; }
+    /// <summary>False when no KEK is configured — then nothing was cryptographically erased.</summary>
+    [JsonPropertyName("encryptionEnabled")] public bool EncryptionEnabled { get; init; }
+    /// <summary>Present only when <see cref="EncryptionEnabled"/> is false. Show it to the operator.</summary>
+    [JsonPropertyName("warning")] public string? Warning { get; init; }
+    [JsonPropertyName("request")] public DsarRequest? Request { get; init; }
+}
+
+/// <summary>Result of exporting a subject's consent for an access or portability request.</summary>
+public sealed record DsarExportResult
+{
+    [JsonPropertyName("records")] public IReadOnlyList<JsonNode> Records { get; init; } = Array.Empty<JsonNode>();
+    [JsonPropertyName("count")] public int Count { get; init; }
+    [JsonPropertyName("request")] public DsarRequest? Request { get; init; }
+}
+
 /// <summary>Org usage/quota summary.</summary>
 public sealed record Usage
 {

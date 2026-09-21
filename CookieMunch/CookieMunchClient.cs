@@ -54,6 +54,32 @@ public sealed class CookieMunchClient : IDisposable
     public WebhooksResource Webhooks { get; }
     /// <summary>Reusable account-level banner designs.</summary>
     public BannersResource Banners { get; }
+    /// <summary>The identity surface.</summary>
+    public IdentityResource Identity { get; }
+    /// <summary>The vault surface.</summary>
+    public VaultResource Vault { get; }
+    /// <summary>The profile surface.</summary>
+    public ProfileResource Profile { get; }
+    /// <summary>The subscriptions surface.</summary>
+    public SubscriptionsResource Subscriptions { get; }
+    /// <summary>The assessments surface.</summary>
+    public AssessmentsResource Assessments { get; }
+    /// <summary>The discovery surface.</summary>
+    public DiscoveryResource Discovery { get; }
+    /// <summary>The ai surface.</summary>
+    public AiResource Ai { get; }
+    /// <summary>The fulfillment surface.</summary>
+    public FulfillmentResource Fulfillment { get; }
+    /// <summary>The regulatory surface.</summary>
+    public RegulatoryResource Regulatory { get; }
+    /// <summary>The reseller surface.</summary>
+    public ResellerResource Reseller { get; }
+    /// <summary>The subjects surface.</summary>
+    public SubjectsResource Subjects { get; }
+    /// <summary>The key's own organisation: name and logo.</summary>
+    public OrgResource Org { get; }
+    /// <summary>Banner images.</summary>
+    public AssetsResource Assets { get; }
 
     /// <summary>
     /// Create a client.
@@ -87,6 +113,19 @@ public sealed class CookieMunchClient : IDisposable
         Keys = new KeysResource(this);
         Webhooks = new WebhooksResource(this);
         Banners = new BannersResource(this);
+        Identity = new IdentityResource(this);
+        Vault = new VaultResource(this);
+        Profile = new ProfileResource(this);
+        Subscriptions = new SubscriptionsResource(this);
+        Assessments = new AssessmentsResource(this);
+        Discovery = new DiscoveryResource(this);
+        Ai = new AiResource(this);
+        Fulfillment = new FulfillmentResource(this);
+        Regulatory = new RegulatoryResource(this);
+        Reseller = new ResellerResource(this);
+        Subjects = new SubjectsResource(this);
+        Org = new OrgResource(this);
+        Assets = new AssetsResource(this);
     }
 
     /// <summary>Identity / echo for SDK bootstrapping (GET /v1/me).</summary>
@@ -96,6 +135,25 @@ public sealed class CookieMunchClient : IDisposable
     /// <summary>Current resource usage for the org (GET /v1/usage).</summary>
     public Task<Usage> UsageAsync(CancellationToken ct = default) =>
         SendAsync<Usage>(HttpMethod.Get, "/v1/usage", null, ct);
+
+    /// <summary>
+    /// The org's audit log, newest first (GET /v1/audit): administrative changes made in the
+    /// dashboard or through the API, and who made them — API actions as <c>apikey:&lt;prefix&gt;</c>.
+    /// <paramref name="limit"/> is 1–500 and defaults to 200 server-side. Requires an unscoped key
+    /// that is not property-locked.
+    /// </summary>
+    public async Task<List<AuditEntry>> AuditAsync(int? limit = null, CancellationToken ct = default)
+    {
+        var body = await SendAsync<AuditLogPage>(
+            HttpMethod.Get, "/v1/audit" + BuildQuery(("limit", limit)), null, ct).ConfigureAwait(false);
+        return body.Entries;
+    }
+
+    private sealed record AuditLogPage
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("entries")]
+        public List<AuditEntry> Entries { get; init; } = new();
+    }
 
     // ── transport ────────────────────────────────────────────────────────────
 

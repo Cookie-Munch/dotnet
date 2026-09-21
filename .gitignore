@@ -1,13 +1,2 @@
-# Build output
 bin/
 obj/
-# Rider / VS
-.vs/
-.idea/
-*.user
-# NuGet
-*.nupkg
-*.snupkg
-# OS
-.DS_Store
-*.log

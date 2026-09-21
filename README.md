@@ -1,10 +1,19 @@
 # CookieMunch .NET SDK
 
 A typed, dependency-free .NET client for the [Cookie Munch](https://cookiemunch.net) Developer
-API — a self-hosted Consent Management Platform. It covers the full `/v1` surface (sites,
-consent, DSAR, vendors, RoPA, brand kits, preferences, members, keys, webhooks, banners) plus
-the public **consent-log ingest** endpoint, which is handy for logging consent from desktop
-apps (WPF / WinUI / MAUI) that render their own consent UI.
+API — a self-hosted Consent Management Platform. It covers every operation of the `/v1`
+Developer API plus the public **consent-log ingest** endpoint, which is handy for logging
+consent from desktop apps (WPF / WinUI / MAUI) that render their own consent UI.
+
+- **Consent platform** — `Sites`, `Consent`, `Dsar`, `Vendors`, `Ropa`, `BrandKits`,
+  `Preferences`, `Members`, `Keys`, `Webhooks`, `Banners`
+- **Org administration** — `Org` (name + logo), `AuditAsync()`, `Assets` (banner images)
+- **Privacy platform** — `Identity`, `Vault`, `Profile`, `Subscriptions`, `Assessments`,
+  `Discovery`, `Ai`, `Fulfillment`, `Regulatory`, `Subjects`
+- **Resellers** — `Reseller` (needs the `reseller:*` scopes)
+
+`ParityTests` keeps that true against `sdks/operations.json`, generated from the server's
+OpenAPI document — a new endpoint fails this suite until the SDK implements it.
 
 - **.NET 8+**, `nullable` enabled, `async` throughout.
 - No third-party dependencies — just `System.Net.Http` + `System.Text.Json`.
@@ -103,6 +112,18 @@ catch (CookieMunchApiException ex)
 - Open, server-owned JSON payloads (site config, banner design JSON, signed receipts) are
   surfaced as `System.Text.Json.Nodes.JsonObject` / `JsonNode` so you can read and write
   arbitrary keys.
+- Optional record members are omitted from requests when null. Where null **means**
+  something, the call takes a `JsonObject`, whose nulls are sent: `Reseller.UpdateAsync(id,
+  new JsonObject { ["dsarRouting"] = null })` clears an override, and
+  `Org.UpdateAsync(new JsonObject { ["logoUrl"] = null })` removes the organisation's logo,
+  where leaving the key out leaves it alone; likewise
+  `Webhooks.UpdateAsync(id, new JsonObject { ["cbid"] = null })` widens a subscription to
+  the whole org.
+- `Keys.IssueAsync(new ApiKeyIssueInput(name, scopes, cbids, expiresInDays))` issues a
+  least-privilege key; a key locked with `cbids` works only on those sites and on no
+  org-wide endpoint.
+- Identity, vault and profile reads are `POST`s so a person's identifiers never appear in
+  a URL.
 
 ## License
 

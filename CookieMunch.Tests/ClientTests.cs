@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace CookieMunch.Tests;
@@ -154,5 +155,147 @@ public class ClientTests
 
         var uri = handler.LastRequest!.RequestUri!.ToString();
         Assert.Equal("https://api.example.test/v1/sites/cb_1/consent/log?from=100&to=200&limit=50", uri);
+    }
+    // ── the operations that used to exist only in the dashboard ──────────────
+
+    /// <summary>
+    /// Removing a logo and leaving it alone are different requests. The serializer is
+    /// configured WhenWritingNull, so a record would drop the null and silently turn
+    /// "take it down" into "leave it" — the patch is a JsonObject for exactly that reason.
+    /// This asserts on the bytes that went out, not on the object handed in.
+    /// </summary>
+    [Fact]
+    public async Task Org_update_sends_logo_null_only_when_clearing()
+    {
+        var handler = MockHttpMessageHandler.Json(HttpStatusCode.OK,
+            """{"id":"org_1","name":"Acme","plan":"pro","logoUrl":null}""");
+        using var client = MakeClient(handler);
+
+        await client.Org.UpdateAsync(new JsonObject { ["logoUrl"] = null });
+        Assert.Contains("\"logoUrl\":null", handler.LastBody);
+        Assert.Equal(HttpMethod.Patch, handler.LastRequest!.Method);
+        Assert.Equal("https://api.example.test/v1/org", handler.LastRequest.RequestUri?.ToString());
+
+        await client.Org.UpdateAsync(new JsonObject { ["name"] = "Acme Ltd" });
+        Assert.DoesNotContain("logoUrl", handler.LastBody);
+    }
+
+    [Fact]
+    public async Task Org_get_reads_the_organisation()
+    {
+        var handler = MockHttpMessageHandler.Json(HttpStatusCode.OK,
+            """{"id":"org_1","name":"Acme","plan":"pro","logoUrl":"https://cdn/x.png"}""");
+        using var client = MakeClient(handler);
+
+        var org = await client.Org.GetAsync();
+
+        Assert.Equal("Acme", org.Name);
+        Assert.Equal("https://cdn/x.png", org.LogoUrl);
+        Assert.Equal("https://api.example.test/v1/org", handler.LastRequest!.RequestUri?.ToString());
+    }
+
+    [Fact]
+    public async Task Audit_unwraps_entries_and_passes_the_limit()
+    {
+        var handler = MockHttpMessageHandler.Json(HttpStatusCode.OK,
+            """{"entries":[{"id":"a1","orgId":"org_1","actorUserId":"apikey:fck_test","action":"org.renamed","at":1}]}""");
+        using var client = MakeClient(handler);
+
+        var entries = await client.AuditAsync(50);
+
+        Assert.Equal("apikey:fck_test", Assert.Single(entries).ActorUserId);
+        Assert.Equal("https://api.example.test/v1/audit?limit=50", handler.LastRequest!.RequestUri?.ToString());
+
+        await client.AuditAsync();
+        Assert.Equal("https://api.example.test/v1/audit", handler.LastRequest.RequestUri?.ToString());
+    }
+
+    [Fact]
+    public async Task Asset_upload_base64_encodes_the_image()
+    {
+        var handler = MockHttpMessageHandler.Json(HttpStatusCode.OK, """{"url":"https://cdn/x.png"}""");
+        using var client = MakeClient(handler);
+
+        var url = await client.Assets.UploadAsync(new byte[] { 0x89, (byte)'P', (byte)'N', (byte)'G' }, "image/png");
+
+        Assert.Equal("https://cdn/x.png", url);
+        Assert.Contains("\"data\":\"iVBORw==\"", handler.LastBody);
+        Assert.Contains("\"contentType\":\"image/png\"", handler.LastBody);
+    }
+
+    [Fact]
+    public async Task Key_roll_and_update_hit_the_right_paths()
+    {
+        var handler = MockHttpMessageHandler.Json(HttpStatusCode.OK, """{"prefix":"fck_new","key":"fck_new_secret"}""");
+        using var client = MakeClient(handler);
+
+        var rolled = await client.Keys.RollAsync("fck_ab12");
+        Assert.Equal("fck_new_secret", rolled.Key);
+        Assert.Equal(HttpMethod.Post, handler.LastRequest!.Method);
+        Assert.Equal("https://api.example.test/v1/keys/fck_ab12/roll", handler.LastRequest.RequestUri?.ToString());
+
+        await client.Keys.UpdateAsync("fck_ab12", new ApiKeyUpdate { Scopes = new[] { "sites:read" } });
+        Assert.Equal(HttpMethod.Patch, handler.LastRequest.Method);
+        Assert.Equal("https://api.example.test/v1/keys/fck_ab12", handler.LastRequest.RequestUri?.ToString());
+        // Unset fields stay out of the body: omitted means unchanged.
+        Assert.DoesNotContain("name", handler.LastBody);
+        Assert.Contains("\"scopes\":[\"sites:read\"]", handler.LastBody);
+    }
+
+    [Fact]
+    public async Task Webhook_roll_test_and_dead_letters()
+    {
+        var handler = MockHttpMessageHandler.Json(HttpStatusCode.OK, """{"secret":"whsec_new"}""");
+        using var client = MakeClient(handler);
+        Assert.Equal("whsec_new", await client.Webhooks.RollSecretAsync("w1"));
+        Assert.Equal("https://api.example.test/v1/webhooks/w1/roll", handler.LastRequest!.RequestUri?.ToString());
+
+        var testHandler = MockHttpMessageHandler.Json(HttpStatusCode.OK, """{"ok":true,"status":200}""");
+        using var testClient = MakeClient(testHandler);
+        var result = await testClient.Webhooks.TestAsync("w1");
+        Assert.True(result.Ok);
+        Assert.Equal(200, result.Status);
+        Assert.Equal("https://api.example.test/v1/webhooks/w1/test", testHandler.LastRequest!.RequestUri?.ToString());
+
+        var dlqHandler = MockHttpMessageHandler.Json(HttpStatusCode.OK,
+            """{"deadLetters":[{"id":"dlq_1","orgId":"org_1","subscriptionId":"w1","url":"https://h","eventType":"consent.recorded","cbid":null,"attempts":5,"failedAt":7}]}""");
+        using var dlqClient = MakeClient(dlqHandler);
+        var dead = await dlqClient.Webhooks.DeadLettersAsync();
+        Assert.Equal("dlq_1", Assert.Single(dead).Id);
+        Assert.Equal("https://api.example.test/v1/webhooks/dead-letters", dlqHandler.LastRequest!.RequestUri?.ToString());
+
+        await dlqClient.Webhooks.ReplayDeadLetterAsync("dlq_1");
+        Assert.Equal("https://api.example.test/v1/webhooks/dead-letters/dlq_1/replay", dlqHandler.LastRequest.RequestUri?.ToString());
+    }
+
+    [Fact]
+    public async Task Dsar_erase_surfaces_the_dormant_crypto_warning()
+    {
+        var handler = MockHttpMessageHandler.Json(HttpStatusCode.OK,
+            """{"erased":0,"encryptionEnabled":false,"warning":"Crypto-erase is not configured (no KEK)","request":{"id":"d1"}}""");
+        using var client = MakeClient(handler);
+
+        var res = await client.Dsar.EraseAsync("d1", "cb_shop", "st-1");
+
+        Assert.False(res.EncryptionEnabled);
+        Assert.Contains("no KEK", res.Warning);
+        Assert.Equal("https://api.example.test/v1/dsar/d1/erase", handler.LastRequest!.RequestUri?.ToString());
+        Assert.Contains("\"cbid\":\"cb_shop\"", handler.LastBody);
+        Assert.Contains("\"stamp\":\"st-1\"", handler.LastBody);
+    }
+
+    [Fact]
+    public async Task Dsar_export_and_preference_get_hit_the_right_paths()
+    {
+        var handler = MockHttpMessageHandler.Json(HttpStatusCode.OK, """{"records":[],"count":0,"request":{"id":"d1"}}""");
+        using var client = MakeClient(handler);
+
+        var res = await client.Dsar.ExportAsync("d1", "cb_shop", "st-1");
+        Assert.Equal(0, res.Count);
+        Assert.Equal("https://api.example.test/v1/dsar/d1/export", handler.LastRequest!.RequestUri?.ToString());
+
+        await client.Preferences.GetAsync("jane@example.com");
+        Assert.Equal(HttpMethod.Get, handler.LastRequest.Method);
+        Assert.Equal("https://api.example.test/v1/preferences/jane%40example.com", handler.LastRequest.RequestUri?.ToString());
     }
 }
