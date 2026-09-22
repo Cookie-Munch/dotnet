@@ -254,26 +254,28 @@ public sealed class FulfillmentResource : ResourceBase
         Client.SendAsync<List<JsonObject>>(HttpMethod.Get, "/v1/dsar/executors", null, ct);
 
     /// <summary>
-    /// Connect one. The secret is stored encrypted and never returned; the response carries the
-    /// webhook URL to configure in that system.
+    /// Connect one. <paramref name="profile"/> describes that system's API — paths, the words
+    /// it uses for export and erase, its status vocabulary, how it signs webhooks — so
+    /// connecting a new platform needs no code. The secret is stored encrypted and never
+    /// returned; the response carries the webhook URL to configure in that system.
     /// </summary>
     public Task<JsonObject> ConnectExecutorAsync(
-        string kind,
+        string system,
         string baseUrl,
         string secretKey,
+        JsonObject profile,
         string? webhookSecret = null,
-        string? system = null,
         bool? auto = null,
         CancellationToken ct = default)
     {
         var body = new JsonObject
         {
-            ["kind"] = kind,
+            ["system"] = system,
             ["baseUrl"] = baseUrl,
             ["secretKey"] = secretKey,
+            ["profile"] = profile,
         };
         if (webhookSecret is not null) body["webhookSecret"] = webhookSecret;
-        if (system is not null) body["system"] = system;
         if (auto is not null) body["auto"] = auto.Value;
         return Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/dsar/executors", body, ct);
     }
