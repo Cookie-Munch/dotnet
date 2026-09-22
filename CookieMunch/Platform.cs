@@ -249,6 +249,44 @@ public sealed class FulfillmentResource : ResourceBase
     public Task<JsonObject> StatusAsync(string requestId, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/dsar/{CookieMunchClient.Enc(requestId)}/fulfillment", null, ct);
 
+    /// <summary>Systems connected to run part of a request themselves. Never includes credentials.</summary>
+    public Task<List<JsonObject>> ExecutorsAsync(CancellationToken ct = default) =>
+        Client.SendAsync<List<JsonObject>>(HttpMethod.Get, "/v1/dsar/executors", null, ct);
+
+    /// <summary>
+    /// Connect one. The secret is stored encrypted and never returned; the response carries the
+    /// webhook URL to configure in that system.
+    /// </summary>
+    public Task<JsonObject> ConnectExecutorAsync(
+        string kind,
+        string baseUrl,
+        string secretKey,
+        string? webhookSecret = null,
+        string? system = null,
+        bool? auto = null,
+        CancellationToken ct = default)
+    {
+        var body = new JsonObject
+        {
+            ["kind"] = kind,
+            ["baseUrl"] = baseUrl,
+            ["secretKey"] = secretKey,
+        };
+        if (webhookSecret is not null) body["webhookSecret"] = webhookSecret;
+        if (system is not null) body["system"] = system;
+        if (auto is not null) body["auto"] = auto.Value;
+        return Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/dsar/executors", body, ct);
+    }
+
+    /// <summary>Disconnect a system; its open sub-tasks stop being driven.</summary>
+    public Task DisconnectExecutorAsync(string id, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject?>(HttpMethod.Delete, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}", null, ct);
+
+    /// <summary>The export bundle a connected system produced, fetched from it on demand.</summary>
+    public Task<JsonObject> TaskExportAsync(string requestId, string taskId, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get,
+            $"/v1/dsar/{CookieMunchClient.Enc(requestId)}/tasks/{CookieMunchClient.Enc(taskId)}/export", null, ct);
+
     /// <summary>For the in-environment agent: tasks to execute inside your network.</summary>
     public Task<JsonObject> PendingTasksAsync(int? limit = null, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Get, "/v1/dsar/agent/tasks" + CookieMunchClient.BuildQuery(("limit", limit)), null, ct);
