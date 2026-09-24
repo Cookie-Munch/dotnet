@@ -38,6 +38,13 @@ public sealed class SitesResource : ResourceBase
     public Task<JsonObject> PutConfigAsync(string cbid, JsonObject config, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/config", config, ct);
 
+    /// <summary>
+    /// Change part of a site's config (PATCH /v1/sites/:cbid/config). Omitted fields keep
+    /// their stored value; PutConfigAsync replaces the whole document.
+    /// </summary>
+    public Task<JsonObject> PatchConfigAsync(string cbid, JsonObject config, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(new HttpMethod("PATCH"), $"/v1/sites/{CookieMunchClient.Enc(cbid)}/config", config, ct);
+
     /// <summary>Latest categorized cookie declaration (GET /v1/sites/:cbid/cookies).</summary>
     public async Task<List<SiteCookie>> CookiesAsync(string cbid, CancellationToken ct = default)
     {
