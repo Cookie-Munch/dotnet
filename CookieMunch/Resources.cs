@@ -150,6 +150,18 @@ public sealed class ConsentResource : ResourceBase
 {
     internal ConsentResource(CookieMunchClient client) : base(client) { }
 
+    /// <summary>
+    /// Verify the consent log's tamper-evident hash chain (GET /v1/sites/:cbid/consent/verify).
+    /// Each record carries the hash of the one before it, so an edited, reordered or removed
+    /// record answers false.
+    /// </summary>
+    public async Task<bool> VerifyAsync(string cbid, CancellationToken ct = default)
+    {
+        var res = await Client.SendAsync<JsonObject>(
+            HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/consent/verify", null, ct).ConfigureAwait(false);
+        return res? ["valid"]?.GetValue<bool>() ?? false;
+    }
+
     /// <summary>Aggregated per-day consent stats (GET /v1/sites/:cbid/consent/stats).</summary>
     public Task<List<ConsentDay>> StatsAsync(string cbid, RangeQuery? query = null, CancellationToken ct = default)
     {
