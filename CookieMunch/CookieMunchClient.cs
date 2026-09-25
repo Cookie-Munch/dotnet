@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace CookieMunch;
 
@@ -131,6 +132,15 @@ public sealed class CookieMunchClient : IDisposable
     /// <summary>Identity / echo for SDK bootstrapping (GET /v1/me).</summary>
     public Task<Identity> MeAsync(CancellationToken ct = default) =>
         SendAsync<Identity>(HttpMethod.Get, "/v1/me", null, ct);
+
+    /// <summary>
+    /// Create a sibling organisation owned by the same account (POST /v1/orgs), for starting a
+    /// separate business of your own. Needs an unscoped key and counts against the account's plan
+    /// org allowance (403 org_limit names the plan). Not reseller provisioning, which is for
+    /// organisations you run on behalf of YOUR customers.
+    /// </summary>
+    public Task<JsonObject> CreateOrgAsync(string name, CancellationToken ct = default) =>
+        SendAsync<JsonObject>(HttpMethod.Post, "/v1/orgs", new JsonObject { ["name"] = name }, ct);
 
     /// <summary>
     /// The languages the banner already has copy for (GET /v1/languages). Diff it against
