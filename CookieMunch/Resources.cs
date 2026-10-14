@@ -34,13 +34,18 @@ public sealed class SitesResource : ResourceBase
     public Task<JsonObject> GetConfigAsync(string cbid, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/config", null, ct);
 
-    /// <summary>Upsert a site's config (PUT /v1/sites/:cbid/config). Partial configs are merged server-side.</summary>
-    public Task<JsonObject> PutConfigAsync(string cbid, JsonObject config, CancellationToken ct = default) =>
-        Client.SendAsync<JsonObject>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/config", config, ct);
+    /// <summary>
+    /// Replace a site's config (PUT /v1/sites/:cbid/config). A top-level field the config omits
+    /// reverts to its default — unless <paramref name="keepUnspecified"/> (?keep=unspecified),
+    /// which keeps its stored value. A top-level field sent as null reverts to its default.
+    /// </summary>
+    public Task<JsonObject> PutConfigAsync(string cbid, JsonObject config, bool keepUnspecified = false, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/config{(keepUnspecified ? "?keep=unspecified" : "")}", config, ct);
 
     /// <summary>
-    /// Change part of a site's config (PATCH /v1/sites/:cbid/config). Omitted fields keep
-    /// their stored value; PutConfigAsync replaces the whole document.
+    /// Change part of a site's config (PATCH /v1/sites/:cbid/config) — a JSON Merge Patch
+    /// (RFC 7386): omitted fields keep their stored value, and a field set to null is removed
+    /// (it takes its default). PutConfigAsync replaces the whole document.
     /// </summary>
     public Task<JsonObject> PatchConfigAsync(string cbid, JsonObject config, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(new HttpMethod("PATCH"), $"/v1/sites/{CookieMunchClient.Enc(cbid)}/config", config, ct);
@@ -50,8 +55,8 @@ public sealed class SitesResource : ResourceBase
     /// /v1/sites/:cbid/config?dryRun=1). Returns <c>config</c> (as it would be saved),
     /// <c>diff</c> (every leaf that would change) and any <c>warnings</c>.
     /// </summary>
-    public Task<JsonObject> DryRunConfigAsync(string cbid, JsonObject config, bool replace = false, CancellationToken ct = default) =>
-        Client.SendAsync<JsonObject>(replace ? HttpMethod.Put : new HttpMethod("PATCH"), $"/v1/sites/{CookieMunchClient.Enc(cbid)}/config?dryRun=1", config, ct);
+    public Task<JsonObject> DryRunConfigAsync(string cbid, JsonObject config, bool replace = false, bool keepUnspecified = false, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(replace ? HttpMethod.Put : new HttpMethod("PATCH"), $"/v1/sites/{CookieMunchClient.Enc(cbid)}/config?dryRun=1{(replace && keepUnspecified ? "&keep=unspecified" : "")}", config, ct);
 
     /// <summary>Latest categorized cookie declaration (GET /v1/sites/:cbid/cookies).</summary>
     public async Task<List<SiteCookie>> CookiesAsync(string cbid, CancellationToken ct = default)
@@ -124,6 +129,52 @@ public sealed class SitesResource : ResourceBase
     /// </summary>
     public Task<JsonObject> ImportDeclarationAsync(string cbid, string data, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/import", new { data }, ct);
+
+    /// <summary>
+    /// Import a declaration exported from another CMP AND declare it
+    /// (POST /v1/sites/:cbid/import?apply=1). Every row whose category mapped to ours and that
+    /// has a purpose is declared; the rest come back in <c>skipped</c>. Cookies the site already
+    /// declared are kept unless <paramref name="overwrite"/>.
+    /// </summary>
+    public Task<JsonObject> ApplyImportAsync(string cbid, string data, bool overwrite = false, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post,
+            $"/v1/sites/{CookieMunchClient.Enc(cbid)}/import?apply=1{(overwrite ? "&overwrite=1" : "")}", new { data }, ct);
+
+    /// <summary>
+    /// Declare what one cookie is (PUT /v1/sites/:cbid/cookies/:name). Overrides scanned,
+    /// observed and database classification everywhere (API, preference modal,
+    /// <c>data-cc="declaration"</c>). A name ending in <c>*</c> declares a prefix wildcard.
+    /// <paramref name="category"/> is a standard category or one of the site's custom ids.
+    /// </summary>
+    public Task<JsonObject> DeclareCookieAsync(string cbid, string name, string category, string purpose,
+        string? provider = null, string? expiry = null, string? domain = null, bool? pattern = null, CancellationToken ct = default)
+    {
+        var body = new JsonObject { ["category"] = category, ["purpose"] = purpose };
+        if (provider is not null) body["provider"] = provider;
+        if (expiry is not null) body["expiry"] = expiry;
+        if (domain is not null) body["domain"] = domain;
+        if (pattern is not null) body["pattern"] = pattern.Value;
+        return Client.SendAsync<JsonObject>(HttpMethod.Put,
+            $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/{CookieMunchClient.Enc(name)}", body, ct);
+    }
+
+    /// <summary>
+    /// Declare many cookies at once (PUT /v1/sites/:cbid/cookies); each entry carries <c>name</c>,
+    /// <c>category</c>, <c>purpose</c> and the optional fields. All-or-nothing;
+    /// <paramref name="replace"/> also removes declarations the list does not name.
+    /// </summary>
+    public Task<JsonObject> DeclareCookiesAsync(string cbid, IEnumerable<JsonObject> cookies, bool replace = false, CancellationToken ct = default)
+    {
+        var list = new JsonArray();
+        foreach (var c in cookies) list.Add(c.DeepClone());
+        var body = new JsonObject { ["cookies"] = list };
+        if (replace) body["replace"] = true;
+        return Client.SendAsync<JsonObject>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies", body, ct);
+    }
+
+    /// <summary>Remove a declaration (DELETE /v1/sites/:cbid/cookies/:name); the scanned classification applies again.</summary>
+    public Task UndeclareCookieAsync(string cbid, string name, CancellationToken ct = default) =>
+        Client.SendAsync(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/{CookieMunchClient.Enc(name)}", null, ct);
 
     /// <summary>
     /// Pages where the embed could not load its banner renderer (GET /v1/sites/:cbid/blocked).
@@ -247,6 +298,14 @@ public sealed class DsarResource : ResourceBase
     /// </summary>
     public Task DeleteAsync(string id, CancellationToken ct = default) =>
         Client.SendAsync(HttpMethod.Delete, $"/v1/dsar/{CookieMunchClient.Enc(id)}", null, ct);
+
+    /// <summary>
+    /// Mark a CLOSED request (completed or rejected) as a test, after the fact
+    /// (POST /v1/dsar/:id/mark-test). An open one is refused with 409 request_not_closed.
+    /// Audited; DeleteAsync then works on it. Returns <c>{ request, changed }</c>.
+    /// </summary>
+    public Task<JsonObject> MarkTestAsync(string id, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/dsar/{CookieMunchClient.Enc(id)}/mark-test", null, ct);
 
     /// <summary>Create a DSAR (POST /v1/dsar).</summary>
     public Task<DsarResponse> CreateAsync(DsarCreate input, CancellationToken ct = default) =>
