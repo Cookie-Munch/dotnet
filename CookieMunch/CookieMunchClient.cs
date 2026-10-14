@@ -102,6 +102,11 @@ public sealed class CookieMunchClient : IDisposable
         // Some deployments accept the key via X-API-Key as well; send both harmlessly.
         if (!_http.DefaultRequestHeaders.Contains("X-API-Key"))
             _http.DefaultRequestHeaders.Add("X-API-Key", apiKey);
+        // HttpClient sends no User-Agent by default, and the API's edge refuses requests
+        // without a recognisable one (a bare 403 "error code: 1010"). Name ourselves unless the
+        // caller's HttpClient already does.
+        if (_http.DefaultRequestHeaders.UserAgent.Count == 0)
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd("cookiemunch-dotnet/0.1.0");
 
         Sites = new SitesResource(this);
         Consent = new ConsentResource(this);
@@ -132,6 +137,15 @@ public sealed class CookieMunchClient : IDisposable
     /// <summary>Identity / echo for SDK bootstrapping (GET /v1/me).</summary>
     public Task<Identity> MeAsync(CancellationToken ct = default) =>
         SendAsync<Identity>(HttpMethod.Get, "/v1/me", null, ct);
+
+    /// <summary>
+    /// Every organisation on this key's account (GET /v1/orgs), each with its effective plan,
+    /// planSource (org = its own subscription, account = covered by a higher plan another org
+    /// on the account pays for) and subscribedPlan, plus orgLimit and upgradeUrl. Needs an
+    /// unscoped key that is not locked to properties.
+    /// </summary>
+    public Task<JsonObject> ListOrgsAsync(CancellationToken ct = default) =>
+        SendAsync<JsonObject>(HttpMethod.Get, "/v1/orgs", null, ct);
 
     /// <summary>
     /// Create a sibling organisation owned by the same account (POST /v1/orgs), for starting a

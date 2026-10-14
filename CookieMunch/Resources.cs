@@ -45,6 +45,14 @@ public sealed class SitesResource : ResourceBase
     public Task<JsonObject> PatchConfigAsync(string cbid, JsonObject config, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(new HttpMethod("PATCH"), $"/v1/sites/{CookieMunchClient.Enc(cbid)}/config", config, ct);
 
+    /// <summary>
+    /// Preview a config write without saving it (PATCH, or with <paramref name="replace"/> PUT,
+    /// /v1/sites/:cbid/config?dryRun=1). Returns <c>config</c> (as it would be saved),
+    /// <c>diff</c> (every leaf that would change) and any <c>warnings</c>.
+    /// </summary>
+    public Task<JsonObject> DryRunConfigAsync(string cbid, JsonObject config, bool replace = false, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(replace ? HttpMethod.Put : new HttpMethod("PATCH"), $"/v1/sites/{CookieMunchClient.Enc(cbid)}/config?dryRun=1", config, ct);
+
     /// <summary>Latest categorized cookie declaration (GET /v1/sites/:cbid/cookies).</summary>
     public async Task<List<SiteCookie>> CookiesAsync(string cbid, CancellationToken ct = default)
     {
@@ -76,6 +84,21 @@ public sealed class SitesResource : ResourceBase
     /// <summary>Verify the site's domain (POST /v1/sites/:cbid/verify). <paramref name="method"/> is dns | meta | file.</summary>
     public Task<VerifyResult> VerifyAsync(string cbid, string method, CancellationToken ct = default) =>
         Client.SendAsync<VerifyResult>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/verify", new { method }, ct);
+
+    /// <summary>
+    /// Mint a short-lived signed token to preview the banner as a visitor in <paramref name="region"/>
+    /// speaking <paramref name="lang"/> sees it — headless browsers included, nothing recorded
+    /// (POST /v1/sites/:cbid/preview-token). The result carries <c>token</c>, <c>expiresAt</c> and <c>previewUrl</c>.
+    /// </summary>
+    public Task<JsonObject> PreviewTokenAsync(string cbid, string? region = null, string? lang = null, string? url = null, int? ttlSeconds = null, CancellationToken ct = default)
+    {
+        var body = new JsonObject();
+        if (region is not null) body["region"] = region;
+        if (lang is not null) body["lang"] = lang;
+        if (url is not null) body["url"] = url;
+        if (ttlSeconds is not null) body["ttlSeconds"] = ttlSeconds;
+        return Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/preview-token", body, ct);
+    }
 
     /// <summary>Suggest theme tokens by extracting the site's brand ("Match my site") (POST /v1/sites/:cbid/brand).</summary>
     public Task<BrandExtractionResult> BrandAsync(string cbid, CancellationToken ct = default) =>
@@ -213,6 +236,17 @@ public sealed class DsarResource : ResourceBase
     /// <summary>List DSARs (GET /v1/dsar).</summary>
     public Task<List<DsarRequest>> ListAsync(CancellationToken ct = default) =>
         Client.SendAsync<List<DsarRequest>>(HttpMethod.Get, "/v1/dsar", null, ct);
+
+    /// <summary>One request, in the shape the list returns (GET /v1/dsar/:id).</summary>
+    public Task<DsarRequest> GetAsync(string id, CancellationToken ct = default) =>
+        Client.SendAsync<DsarRequest>(HttpMethod.Get, $"/v1/dsar/{CookieMunchClient.Enc(id)}", null, ct);
+
+    /// <summary>
+    /// Delete a TEST request with its tasks and log (DELETE /v1/dsar/:id). A real request is
+    /// refused with 409 not_a_test_request; the deletion is audited.
+    /// </summary>
+    public Task DeleteAsync(string id, CancellationToken ct = default) =>
+        Client.SendAsync(HttpMethod.Delete, $"/v1/dsar/{CookieMunchClient.Enc(id)}", null, ct);
 
     /// <summary>Create a DSAR (POST /v1/dsar).</summary>
     public Task<DsarResponse> CreateAsync(DsarCreate input, CancellationToken ct = default) =>

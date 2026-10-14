@@ -280,6 +280,42 @@ public sealed class FulfillmentResource : ResourceBase
         return Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/dsar/executors", body, ct);
     }
 
+    /// <summary>
+    /// Change a connection in place (PATCH /v1/dsar/executors/:id). Only the keys present in
+    /// <paramref name="patch"/> change; the credential is kept unless <c>secretKey</c> is given,
+    /// and <c>"webhookSecret": null</c> removes it (a JsonObject keeps the null on the wire).
+    /// </summary>
+    public Task<JsonObject> UpdateExecutorAsync(string id, JsonObject patch, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Patch, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}", patch, ct);
+
+    /// <summary>
+    /// Try a connection against one email without filing a request (POST
+    /// /v1/dsar/executors/:id/test). Runs the lookup and returns the raw (redacted) upstream
+    /// answers. <paramref name="open"/> on an export opens and polls a real export once; an
+    /// erasure is never sent.
+    /// </summary>
+    public Task<JsonObject> TestExecutorAsync(
+        string id,
+        string email,
+        string? operation = null,
+        bool? open = null,
+        CancellationToken ct = default)
+    {
+        var body = new JsonObject { ["email"] = email };
+        if (operation is not null) body["operation"] = operation;
+        if (open is not null) body["open"] = open.Value;
+        return Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}/test", body, ct);
+    }
+
+    /// <summary>
+    /// One task (GET /v1/dsar/:id/tasks/:taskId): its status history (<c>events</c>), the requests
+    /// made to a connected system on its behalf (<c>log</c>, redacted, 30 days) and whether that
+    /// system's version changed mid-request.
+    /// </summary>
+    public Task<JsonObject> TaskAsync(string requestId, string taskId, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get,
+            $"/v1/dsar/{CookieMunchClient.Enc(requestId)}/tasks/{CookieMunchClient.Enc(taskId)}", null, ct);
+
     /// <summary>Disconnect a system; its open sub-tasks stop being driven.</summary>
     public Task DisconnectExecutorAsync(string id, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject?>(HttpMethod.Delete, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}", null, ct);

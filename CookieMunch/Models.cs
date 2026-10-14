@@ -28,10 +28,19 @@ public sealed record SupportedLanguage(
     [property: JsonPropertyName("source")] string Source);
 
 /// <summary>Identity / echo for SDK bootstrapping (GET /v1/me).</summary>
+/// <remarks>
+/// <c>Plan</c> is the EFFECTIVE plan; <c>PlanSource</c> is <c>org</c> (its own subscription,
+/// free, or a reseller child plan) or <c>account</c> (a higher plan another org with the same
+/// owner pays for covers it); <c>SubscribedPlan</c> is what the org pays for itself.
+/// </remarks>
 public sealed record Identity(
     [property: JsonPropertyName("orgId")] string OrgId,
     [property: JsonPropertyName("plan")] string Plan,
-    [property: JsonPropertyName("keyPrefix")] string KeyPrefix);
+    [property: JsonPropertyName("keyPrefix")] string KeyPrefix,
+    [property: JsonPropertyName("orgName")] string? OrgName = null,
+    [property: JsonPropertyName("planSource")] string? PlanSource = null,
+    [property: JsonPropertyName("subscribedPlan")] string? SubscribedPlan = null,
+    [property: JsonPropertyName("features")] List<string>? Features = null);
 
 /// <summary>A registered site (property).</summary>
 public sealed record Site
@@ -140,6 +149,8 @@ public sealed record DsarRequest
     [JsonPropertyName("createdAt")] public long CreatedAt { get; init; }
     [JsonPropertyName("dueAt")] public long DueAt { get; init; }
     [JsonPropertyName("note")] public string? Note { get; init; }
+    /// <summary>True for a test request (off the SLA board, deletable).</summary>
+    [JsonPropertyName("test")] public bool? Test { get; init; }
 }
 
 /// <summary>Input for creating a DSAR. Use the <see cref="DsarType"/>/<see cref="Regulation"/> constants.</summary>
@@ -149,6 +160,11 @@ public sealed record DsarCreate
     [JsonPropertyName("subjectEmail")] public required string SubjectEmail { get; init; }
     [JsonPropertyName("regulation")] public required string Regulation { get; init; }
     [JsonPropertyName("note")] public string? Note { get; init; }
+    /// <summary>
+    /// A test request: left out of SLA metrics and the deadline board, labelled as a test, and
+    /// deletable with <see cref="DsarResource.DeleteAsync"/>.
+    /// </summary>
+    [JsonPropertyName("test")] public bool? Test { get; init; }
 }
 
 /// <summary>Wrapper the server returns for single-DSAR responses.</summary>
