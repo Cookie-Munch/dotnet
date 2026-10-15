@@ -278,6 +278,9 @@ public sealed class CookieMunchClient : IDisposable
 
     internal static string Enc(string segment) => Uri.EscapeDataString(segment);
 
+    /// <summary>The HttpClient's timeout: a long-poll asks the server to hold less than this.</summary>
+    internal TimeSpan HttpTimeout => _http.Timeout;
+
     /// <summary>Dispose the owned <see cref="HttpClient"/> (no-op if one was supplied by the caller).</summary>
     public void Dispose()
     {

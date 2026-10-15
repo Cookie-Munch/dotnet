@@ -264,7 +264,17 @@ public sealed record SiteCookie
 public sealed record ScanResult
 {
     [JsonPropertyName("scanId")] public string? ScanId { get; init; }
+    /// <summary><c>idle</c> | <c>scanning</c> — kept for older clients; read <see cref="State"/>.</summary>
     [JsonPropertyName("status")] public string Status { get; init; } = "";
+    /// <summary><c>queued</c> | <c>scanning</c> | <c>done</c> | <c>failed</c>; null when the site was never scanned.</summary>
+    [JsonPropertyName("state")] public string? State { get; init; }
+    [JsonPropertyName("durationMs")] public long? DurationMs { get; init; }
+    /// <summary>Cookies this crawl saw; the stored list also keeps <see cref="KeptFromEarlier"/> earlier finds.</summary>
+    [JsonPropertyName("cookieCount")] public int? CookieCount { get; init; }
+    [JsonPropertyName("keptFromEarlier")] public int? KeptFromEarlier { get; init; }
+    [JsonPropertyName("pagesVisited")] public int? PagesVisited { get; init; }
+    /// <summary>Why the scan failed.</summary>
+    [JsonPropertyName("error")] public string? Error { get; init; }
     [JsonPropertyName("startedAt")] public long? StartedAt { get; init; }
     [JsonPropertyName("finishedAt")] public long? FinishedAt { get; init; }
     [JsonPropertyName("pagesScanned")] public int? PagesScanned { get; init; }

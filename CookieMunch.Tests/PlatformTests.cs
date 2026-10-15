@@ -163,4 +163,40 @@ public class PlatformTests
         await list.Fulfillment.ExecutorWebhookDeliveriesAsync("ex_1");
         Assert.Equal("GET https://api.example.test/v1/dsar/executors/ex_1/webhook/deliveries", $"{_calls[0].Method} {_calls[0].Url}");
     }
+
+    [Fact]
+    public async Task RetireAndUnretire()
+    {
+        using var c = Client(body: "{\"dryRun\":true,\"retired\":[]}");
+        await c.Sites.RetireCookieAsync("cb", "old", renamedTo: "new", note: "v2");
+        await c.Sites.RetireCookieAsync("cb", "theme", dryRun: true);
+        var dry = await c.Sites.UnretireCookieDryRunAsync("cb", "old");
+        await c.Sites.UnretireCookieAsync("cb", "old");
+        Assert.Equal(new[]
+        {
+            "POST https://api.example.test/v1/sites/cb/cookies/old/retire",
+            "POST https://api.example.test/v1/sites/cb/cookies/theme/retire?dryRun=1",
+            "DELETE https://api.example.test/v1/sites/cb/cookies/old/retire?dryRun=1",
+            "DELETE https://api.example.test/v1/sites/cb/cookies/old/retire",
+        }, _calls.Select(x => $"{x.Method} {x.Url}").ToArray());
+        using var first = JsonDocument.Parse(_calls[0].Body);
+        Assert.Equal("new", first.RootElement.GetProperty("renamedTo").GetString());
+        Assert.Equal("v2", first.RootElement.GetProperty("note").GetString());
+        Assert.Equal("{}", _calls[1].Body);
+        Assert.True(dry["dryRun"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task ScanWaitAndWaitForScan()
+    {
+        using var c = Client(body: "{\"status\":\"idle\",\"state\":\"done\",\"scanId\":\"s1\",\"cookieCount\":3,\"keptFromEarlier\":12,\"pagesVisited\":5,\"durationMs\":31000,\"lastScannedAt\":9}");
+        await c.Sites.ScanAsync("cb", TimeSpan.FromSeconds(30));
+        await c.Sites.ScanStatusAsync("cb", TimeSpan.FromMilliseconds(1500));
+        var r = await c.Sites.WaitForScanAsync("cb", TimeSpan.FromMinutes(2));
+        Assert.Equal("https://api.example.test/v1/sites/cb/scan?wait=30", _calls[0].Url);
+        Assert.Equal("https://api.example.test/v1/sites/cb/scan?wait=1.5", _calls[1].Url);
+        // HttpClient's default timeout is 100 s, so the server may hold the full 60.
+        Assert.Equal("https://api.example.test/v1/sites/cb/scan?wait=60", _calls[2].Url);
+        Assert.Equal(("done", "s1", 3, 12, 5, 31000L), (r.State, r.ScanId, r.CookieCount, r.KeptFromEarlier, r.PagesVisited, r.DurationMs));
+    }
 }

@@ -81,9 +81,49 @@ public sealed class SitesResource : ResourceBase
     public Task<ScanResult> ScanAsync(string cbid, CancellationToken ct = default) =>
         Client.SendAsync<ScanResult>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/scan", null, ct);
 
-    /// <summary>Current cookie-scan status (GET /v1/sites/:cbid/scan).</summary>
+    /// <summary>
+    /// Start a cookie crawl and hold the request until it is done or failed, or until
+    /// <paramref name="wait"/> (at most 60 s) runs out (POST /v1/sites/:cbid/scan?wait=).
+    /// </summary>
+    public Task<ScanResult> ScanAsync(string cbid, TimeSpan wait, CancellationToken ct = default) =>
+        Client.SendAsync<ScanResult>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/scan{WaitQuery(wait)}", null, ct);
+
+    /// <summary>The last scan: state, timings, cookie count, pages, error (GET /v1/sites/:cbid/scan).</summary>
     public Task<ScanResult> ScanStatusAsync(string cbid, CancellationToken ct = default) =>
         Client.SendAsync<ScanResult>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/scan", null, ct);
+
+    /// <summary>The last scan, holding the request until a running scan settles or <paramref name="wait"/> (at most 60 s) runs out.</summary>
+    public Task<ScanResult> ScanStatusAsync(string cbid, TimeSpan wait, CancellationToken ct = default) =>
+        Client.SendAsync<ScanResult>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/scan{WaitQuery(wait)}", null, ct);
+
+    /// <summary>
+    /// Return once the site's scan is done or failed (read <c>State</c> and <c>Error</c>),
+    /// long-polling the server; at <paramref name="timeout"/> it returns the still-running
+    /// state. Each request asks the server to hold no longer than the HttpClient's own timeout allows.
+    /// </summary>
+    public async Task<ScanResult> WaitForScanAsync(string cbid, TimeSpan timeout, CancellationToken ct = default)
+    {
+        var until = DateTime.UtcNow + timeout;
+        while (true)
+        {
+            var asked = until - DateTime.UtcNow;
+            if (asked > TimeSpan.FromSeconds(60)) asked = TimeSpan.FromSeconds(60);
+            var cap = Client.HttpTimeout - TimeSpan.FromSeconds(5);
+            if (Client.HttpTimeout != System.Threading.Timeout.InfiniteTimeSpan && asked > cap) asked = cap;
+            if (asked < TimeSpan.Zero) asked = TimeSpan.Zero;
+            var started = DateTime.UtcNow;
+            var r = await ScanStatusAsync(cbid, asked, ct).ConfigureAwait(false);
+            if (r.Status != "scanning" || DateTime.UtcNow >= until) return r;
+            // A server that answered sooner than asked is not hammered.
+            var gap = until - DateTime.UtcNow < TimeSpan.FromSeconds(1) ? until - DateTime.UtcNow : TimeSpan.FromSeconds(1);
+            var early = gap - (DateTime.UtcNow - started);
+            if (early > TimeSpan.Zero) await Task.Delay(early, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary><c>?wait=30</c>, <c>?wait=1.5</c>.</summary>
+    private static string WaitQuery(TimeSpan wait) =>
+        "?wait=" + Math.Round(wait.TotalSeconds, 3).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>A/B experiment results for the site (GET /v1/sites/:cbid/ab).</summary>
     public Task<List<AbResult>> AbAsync(string cbid, CancellationToken ct = default) =>
@@ -193,6 +233,29 @@ public sealed class SitesResource : ResourceBase
         if (replace) body["replace"] = true;
         return Client.SendAsync<JsonObject>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies{(dryRun ? "?dryRun=1" : "")}", body, ct);
     }
+
+    /// <summary>
+    /// Retire a cookie the site renamed or stopped setting (POST /v1/sites/:cbid/cookies/:name/retire).
+    /// It leaves the banner's cookie list, <c>data-cc="declaration"</c> and the public feed, and
+    /// stays listed for the owner with <c>retired</c>. A name ending in <c>*</c> retires every
+    /// cookie with that prefix. If a crawl or a visit sees it again afterwards it is listed
+    /// again, flagged <c>retired_but_seen</c>. <paramref name="dryRun"/> stores nothing.
+    /// </summary>
+    public Task<JsonObject> RetireCookieAsync(string cbid, string name, string? renamedTo = null, string? note = null, bool dryRun = false, CancellationToken ct = default)
+    {
+        var body = new JsonObject();
+        if (renamedTo is not null) body["renamedTo"] = renamedTo;
+        if (note is not null) body["note"] = note;
+        return Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/{CookieMunchClient.Enc(name)}/retire{(dryRun ? "?dryRun=1" : "")}", body, ct);
+    }
+
+    /// <summary>Un-retire a cookie (DELETE /v1/sites/:cbid/cookies/:name/retire); it is listed again everywhere.</summary>
+    public Task UnretireCookieAsync(string cbid, string name, CancellationToken ct = default) =>
+        Client.SendAsync(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/{CookieMunchClient.Enc(name)}/retire", null, ct);
+
+    /// <summary>What un-retiring would leave (<c>retired</c>), with nothing removed (…/retire?dryRun=1).</summary>
+    public Task<JsonObject> UnretireCookieDryRunAsync(string cbid, string name, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/{CookieMunchClient.Enc(name)}/retire?dryRun=1", null, ct);
 
     /// <summary>Remove a declaration (DELETE /v1/sites/:cbid/cookies/:name); the scanned classification applies again.</summary>
     public Task UndeclareCookieAsync(string cbid, string name, CancellationToken ct = default) =>
