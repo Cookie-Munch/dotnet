@@ -258,6 +258,9 @@ public sealed class FulfillmentResource : ResourceBase
     /// it uses for export and erase, its status vocabulary, how it signs webhooks — so
     /// connecting a new platform needs no code. The secret is stored encrypted and never
     /// returned; the response carries the webhook URL to configure in that system.
+    /// A <c>whsec_&lt;base64&gt;</c> webhook secret verifies deliveries
+    /// signed with its base64-decoded bytes or with the literal string; any other secret only
+    /// with its UTF-8 bytes.
     /// </summary>
     public Task<JsonObject> ConnectExecutorAsync(
         string system,
@@ -266,7 +269,24 @@ public sealed class FulfillmentResource : ResourceBase
         JsonObject profile,
         string? webhookSecret = null,
         bool? auto = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/dsar/executors", ExecutorBody(system, baseUrl, secretKey, profile, webhookSecret, auto), ct);
+
+    /// <summary>
+    /// What <see cref="ConnectExecutorAsync"/> would create, validated in full, with nothing
+    /// stored (POST /v1/dsar/executors?dryRun=1). Returns <c>dryRun</c>, <c>executor</c>, <c>diff</c>.
+    /// </summary>
+    public Task<JsonObject> DryRunConnectExecutorAsync(
+        string system,
+        string baseUrl,
+        string secretKey,
+        JsonObject profile,
+        string? webhookSecret = null,
+        bool? auto = null,
+        CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/dsar/executors?dryRun=1", ExecutorBody(system, baseUrl, secretKey, profile, webhookSecret, auto), ct);
+
+    private static JsonObject ExecutorBody(string system, string baseUrl, string secretKey, JsonObject profile, string? webhookSecret, bool? auto)
     {
         var body = new JsonObject
         {
@@ -277,7 +297,7 @@ public sealed class FulfillmentResource : ResourceBase
         };
         if (webhookSecret is not null) body["webhookSecret"] = webhookSecret;
         if (auto is not null) body["auto"] = auto.Value;
-        return Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/dsar/executors", body, ct);
+        return body;
     }
 
     /// <summary>
@@ -287,6 +307,38 @@ public sealed class FulfillmentResource : ResourceBase
     /// </summary>
     public Task<JsonObject> UpdateExecutorAsync(string id, JsonObject patch, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Patch, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}", patch, ct);
+
+    /// <summary>
+    /// The connection as <see cref="UpdateExecutorAsync"/> would leave it, and a diff, changing
+    /// nothing (PATCH /v1/dsar/executors/:id?dryRun=1).
+    /// </summary>
+    public Task<JsonObject> DryRunUpdateExecutorAsync(string id, JsonObject patch, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Patch, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}?dryRun=1", patch, ct);
+
+    /// <summary>
+    /// Would this webhook delivery verify? (POST /v1/dsar/executors/:id/webhook/test). Runs the
+    /// receiver's exact check on <paramref name="headers"/> and the raw <paramref name="body"/>
+    /// string (the bytes that were signed) and acts on nothing. Returns <c>verified</c>,
+    /// <c>stage</c> and <c>reason</c>.
+    /// </summary>
+    public Task<JsonObject> TestExecutorWebhookAsync(
+        string id,
+        IReadOnlyDictionary<string, string> headers,
+        string body,
+        CancellationToken ct = default)
+    {
+        var h = new JsonObject();
+        foreach (var (k, v) in headers) h[k] = v;
+        var payload = new JsonObject { ["headers"] = h, ["body"] = body };
+        return Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}/webhook/test", payload, ct);
+    }
+
+    /// <summary>
+    /// The last 50 deliveries to a connection's webhook, newest first, each with its reason
+    /// (GET /v1/dsar/executors/:id/webhook/deliveries).
+    /// </summary>
+    public Task<List<JsonObject>> ExecutorWebhookDeliveriesAsync(string id, CancellationToken ct = default) =>
+        Client.SendAsync<List<JsonObject>>(HttpMethod.Get, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}/webhook/deliveries", null, ct);
 
     /// <summary>
     /// Try a connection against one email without filing a request (POST

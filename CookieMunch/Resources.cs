@@ -155,36 +155,55 @@ public sealed class SitesResource : ResourceBase
     /// observed and database classification everywhere (API, preference modal,
     /// <c>data-cc="declaration"</c>). A name ending in <c>*</c> declares a prefix wildcard.
     /// <paramref name="category"/> is a standard category or one of the site's custom ids.
+    /// <paramref name="purposes"/> is the purpose in other languages, keyed by BCP-47 tag
+    /// (<c>es</c>, <c>pt-BR</c>); <paramref name="purpose"/> is the fallback.
+    /// <paramref name="dryRun"/> stores nothing and answers with <c>declared</c> (the would-be
+    /// list) and a <c>diff</c>.
     /// </summary>
     public Task<JsonObject> DeclareCookieAsync(string cbid, string name, string category, string purpose,
-        string? provider = null, string? expiry = null, string? domain = null, bool? pattern = null, CancellationToken ct = default)
+        string? provider = null, string? expiry = null, string? domain = null, bool? pattern = null,
+        IReadOnlyDictionary<string, string>? purposes = null, bool dryRun = false, CancellationToken ct = default)
     {
         var body = new JsonObject { ["category"] = category, ["purpose"] = purpose };
         if (provider is not null) body["provider"] = provider;
         if (expiry is not null) body["expiry"] = expiry;
         if (domain is not null) body["domain"] = domain;
         if (pattern is not null) body["pattern"] = pattern.Value;
+        if (purposes is not null)
+        {
+            var map = new JsonObject();
+            foreach (var (lang, text) in purposes) map[lang] = text;
+            body["purposes"] = map;
+        }
         return Client.SendAsync<JsonObject>(HttpMethod.Put,
-            $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/{CookieMunchClient.Enc(name)}", body, ct);
+            $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/{CookieMunchClient.Enc(name)}{(dryRun ? "?dryRun=1" : "")}", body, ct);
     }
 
     /// <summary>
     /// Declare many cookies at once (PUT /v1/sites/:cbid/cookies); each entry carries <c>name</c>,
     /// <c>category</c>, <c>purpose</c> and the optional fields. All-or-nothing;
-    /// <paramref name="replace"/> also removes declarations the list does not name.
+    /// <paramref name="replace"/> also removes declarations the list does not name;
+    /// <paramref name="dryRun"/> stores nothing and answers with what would be, plus a <c>diff</c>.
     /// </summary>
-    public Task<JsonObject> DeclareCookiesAsync(string cbid, IEnumerable<JsonObject> cookies, bool replace = false, CancellationToken ct = default)
+    public Task<JsonObject> DeclareCookiesAsync(string cbid, IEnumerable<JsonObject> cookies, bool replace = false, bool dryRun = false, CancellationToken ct = default)
     {
         var list = new JsonArray();
         foreach (var c in cookies) list.Add(c.DeepClone());
         var body = new JsonObject { ["cookies"] = list };
         if (replace) body["replace"] = true;
-        return Client.SendAsync<JsonObject>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies", body, ct);
+        return Client.SendAsync<JsonObject>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies{(dryRun ? "?dryRun=1" : "")}", body, ct);
     }
 
     /// <summary>Remove a declaration (DELETE /v1/sites/:cbid/cookies/:name); the scanned classification applies again.</summary>
     public Task UndeclareCookieAsync(string cbid, string name, CancellationToken ct = default) =>
         Client.SendAsync(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/{CookieMunchClient.Enc(name)}", null, ct);
+
+    /// <summary>
+    /// What removing a declaration would leave — <c>declared</c> and a <c>diff</c> — with nothing
+    /// removed (DELETE /v1/sites/:cbid/cookies/:name?dryRun=1).
+    /// </summary>
+    public Task<JsonObject> UndeclareCookieDryRunAsync(string cbid, string name, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/{CookieMunchClient.Enc(name)}?dryRun=1", null, ct);
 
     /// <summary>
     /// Pages where the embed could not load its banner renderer (GET /v1/sites/:cbid/blocked).

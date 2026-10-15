@@ -22,6 +22,29 @@ public class PlatformTests
         return new CookieMunchClient("fck_test", "https://api.example.test", new HttpClient(handler));
     }
 
+    /// <summary>Numestri F-01: per-language purposes, and dryRun on every declaration write.</summary>
+    [Fact]
+    public async Task DeclaredCookiesCarryPurposesAndDryRun()
+    {
+        using var c = Client(body: "{\"dryRun\":true,\"declared\":[],\"diff\":{\"added\":[],\"removed\":[],\"changed\":[]}}");
+        await c.Sites.DeclareCookieAsync("cb", "sid", "necessary", "Signed in.", purposes: new Dictionary<string, string> { ["es"] = "Sesión." });
+        await c.Sites.DeclareCookieAsync("cb", "sid", "necessary", "Signed in.", dryRun: true);
+        await c.Sites.DeclareCookiesAsync("cb", new[] { new JsonObject { ["name"] = "a", ["category"] = "necessary", ["purpose"] = "A" } }, replace: true, dryRun: true);
+        var dry = await c.Sites.UndeclareCookieDryRunAsync("cb", "sid");
+        Assert.Equal(new[]
+        {
+            "PUT https://api.example.test/v1/sites/cb/cookies/sid",
+            "PUT https://api.example.test/v1/sites/cb/cookies/sid?dryRun=1",
+            "PUT https://api.example.test/v1/sites/cb/cookies?dryRun=1",
+            "DELETE https://api.example.test/v1/sites/cb/cookies/sid?dryRun=1",
+        }, _calls.Select(x => $"{x.Method} {x.Url}").ToArray());
+        using var first = JsonDocument.Parse(_calls[0].Body);
+        Assert.Equal("Sesión.", first.RootElement.GetProperty("purposes").GetProperty("es").GetString());
+        using var second = JsonDocument.Parse(_calls[1].Body);
+        Assert.False(second.RootElement.TryGetProperty("purposes", out _));
+        Assert.True(dry["dryRun"]!.GetValue<bool>());
+    }
+
     [Fact]
     public async Task DeprovisionSuspendsByDefaultAndPurgesOnlyWhenAsked()
     {
@@ -115,5 +138,29 @@ public class PlatformTests
         Assert.Equal("{\"hostname\":\"privacy.acme.com\"}", _calls[1].Body);
         Assert.Equal(b + "/s/rights-page/domains/privacy.acme.com/verify", _calls[2].Url);
         Assert.Equal(b + "/s/rights-page/domains/privacy.acme.com", _calls[3].Url);
+    }
+
+    [Fact]
+    public async Task ExecutorWebhookCheckDeliveriesAndDryRuns()
+    {
+        using var c = Client();
+        await c.Fulfillment.TestExecutorWebhookAsync("ex_1", new Dictionary<string, string> { ["x-sig"] = "v1,abc" }, "{\"a\":1}");
+        await c.Fulfillment.DryRunConnectExecutorAsync("crm", "https://crm.example", "sk_12345678", new JsonObject());
+        await c.Fulfillment.DryRunUpdateExecutorAsync("ex_1", new JsonObject { ["auto"] = false });
+        await c.Fulfillment.UpdateExecutorAsync("ex_1", new JsonObject { ["auto"] = false });
+        Assert.Equal(new[]
+        {
+            "POST https://api.example.test/v1/dsar/executors/ex_1/webhook/test",
+            "POST https://api.example.test/v1/dsar/executors?dryRun=1",
+            "PATCH https://api.example.test/v1/dsar/executors/ex_1?dryRun=1",
+            "PATCH https://api.example.test/v1/dsar/executors/ex_1",
+        }, _calls.Select(x => $"{x.Method} {x.Url}").ToArray());
+        using var sent = JsonDocument.Parse(_calls[0].Body);
+        Assert.Equal("v1,abc", sent.RootElement.GetProperty("headers").GetProperty("x-sig").GetString());
+        Assert.Equal("{\"a\":1}", sent.RootElement.GetProperty("body").GetString());
+
+        using var list = Client(body: "[]");
+        await list.Fulfillment.ExecutorWebhookDeliveriesAsync("ex_1");
+        Assert.Equal("GET https://api.example.test/v1/dsar/executors/ex_1/webhook/deliveries", $"{_calls[0].Method} {_calls[0].Url}");
     }
 }
