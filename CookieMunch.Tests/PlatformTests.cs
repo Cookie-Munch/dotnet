@@ -87,4 +87,33 @@ public class PlatformTests
             Assert.Contains("\"identifiers\":[{\"space\":\"email_sha256\",\"value\":\"abc\"}]", body);
         }
     }
+
+    [Fact]
+    public async Task RightsLinksCreateSendsTheSubjectAndOptions()
+    {
+        using var c = Client(HttpStatusCode.Created, "{\"url\":\"https://cookiemunch.net/r/s1?t=a.b\",\"expiresAt\":1}");
+        var outp = await c.RightsLinks.CreateAsync("s1", "p@x.com", userId: "u-1", rights: new[] { "access" }, ttlSeconds: 600);
+        await c.RightsLinks.CreateAsync("s1", "p@x.com");
+        Assert.Equal("https://cookiemunch.net/r/s1?t=a.b", (string?)outp["url"]);
+        Assert.Equal("POST", _calls[0].Method);
+        Assert.Equal("https://api.example.test/v1/sites/s1/rights-links", _calls[0].Url);
+        Assert.Equal("{\"subject\":{\"email\":\"p@x.com\",\"userId\":\"u-1\"},\"rights\":[\"access\"],\"ttlSeconds\":600}", _calls[0].Body);
+        Assert.Equal("{\"subject\":{\"email\":\"p@x.com\"}}", _calls[1].Body);
+    }
+
+    [Fact]
+    public async Task RightsPageDomains()
+    {
+        using var c = Client();
+        await c.RightsPage.ListDomainsAsync("s1");
+        await c.RightsPage.AddDomainAsync("s", "privacy.acme.com");
+        await c.RightsPage.VerifyDomainAsync("s", "privacy.acme.com");
+        await c.RightsPage.RemoveDomainAsync("s", "privacy.acme.com");
+        const string b = "https://api.example.test/v1/sites";
+        Assert.Equal(new[] { "GET", "POST", "POST", "DELETE" }, _calls.Select(x => x.Method).ToArray());
+        Assert.Equal(b + "/s1/rights-page/domains", _calls[0].Url);
+        Assert.Equal("{\"hostname\":\"privacy.acme.com\"}", _calls[1].Body);
+        Assert.Equal(b + "/s/rights-page/domains/privacy.acme.com/verify", _calls[2].Url);
+        Assert.Equal(b + "/s/rights-page/domains/privacy.acme.com", _calls[3].Url);
+    }
 }

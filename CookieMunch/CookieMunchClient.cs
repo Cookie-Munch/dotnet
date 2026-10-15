@@ -45,6 +45,8 @@ public sealed class CookieMunchClient : IDisposable
     public RopaResource Ropa { get; }
     /// <summary>Reusable banner themes.</summary>
     public BrandKitsResource BrandKits { get; }
+    /// <summary>The hosted rights page.</summary>
+    public RightsPageResource RightsPage { get; }
     /// <summary>Preference-center records.</summary>
     public PreferencesResource Preferences { get; }
     /// <summary>Org members.</summary>
@@ -77,6 +79,12 @@ public sealed class CookieMunchClient : IDisposable
     public ResellerResource Reseller { get; }
     /// <summary>The subjects surface.</summary>
     public SubjectsResource Subjects { get; }
+    /// <summary>Account-linked rights requests (single-use links to the hosted rights page).</summary>
+    public RightsLinksResource RightsLinks { get; }
+    /// <summary>A site's rights-page captcha: your own keys (recommended), or off.</summary>
+    public RightsCaptchaResource RightsCaptcha { get; }
+    /// <summary>A site's sign-in provider: a visitor signed in to your site is verified by their session, with no code mail.</summary>
+    public RightsIdentityResource RightsIdentity { get; }
     /// <summary>The key's own organisation: name and logo.</summary>
     public OrgResource Org { get; }
     /// <summary>Banner images.</summary>
@@ -114,6 +122,7 @@ public sealed class CookieMunchClient : IDisposable
         Vendors = new VendorsResource(this);
         Ropa = new RopaResource(this);
         BrandKits = new BrandKitsResource(this);
+        RightsPage = new RightsPageResource(this);
         Preferences = new PreferencesResource(this);
         Members = new MembersResource(this);
         Keys = new KeysResource(this);
@@ -130,6 +139,9 @@ public sealed class CookieMunchClient : IDisposable
         Regulatory = new RegulatoryResource(this);
         Reseller = new ResellerResource(this);
         Subjects = new SubjectsResource(this);
+        RightsLinks = new RightsLinksResource(this);
+        RightsCaptcha = new RightsCaptchaResource(this);
+        RightsIdentity = new RightsIdentityResource(this);
         Org = new OrgResource(this);
         Assets = new AssetsResource(this);
     }

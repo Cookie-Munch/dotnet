@@ -10,6 +10,11 @@ consent from desktop apps (WPF / WinUI / MAUI) that render their own consent UI.
 - **Org administration** — `Org` (name + logo), `AuditAsync()`, `Assets` (banner images)
 - **Privacy platform** — `Identity`, `Vault`, `Profile`, `Subscriptions`, `Assessments`,
   `Discovery`, `Ai`, `Fulfillment`, `Regulatory`, `Subjects`
+- **Rights page** — `RightsPage`: the page (`GetAsync`, `PutAsync`, `PatchAsync`, `DryRunAsync`, `GetPublishedAsync`, `PublishAsync`, `VersionsAsync`, `RollbackAsync`) and its custom domains (`ListDomainsAsync`, `AddDomainAsync`, `VerifyDomainAsync`, `RemoveDomainAsync`). Pass the draft's `updatedAt` as `baseUpdatedAt` to `PublishAsync` / `RollbackAsync` so only the draft you read goes live (409 `draft_conflict` otherwise); a rollback replaces the draft.
+- **Rights links** — `RightsLinks.CreateAsync` mints a signed, single-use link to the rights page for a signed-in person
+- **Mail for rights requests** — `Org.MailProviderAsync`, `SetMailProviderAsync`, `TestMailProviderAsync`, `RemoveMailProviderAsync` (your own provider; it carries verification codes once a test succeeds — there is no shared sender)
+- **Rights-page captcha** — `RightsCaptcha.GetAsync`, `SetAsync`, `RemoveAsync` per site; the org default via `Org.RightsCaptchaAsync`, `SetRightsCaptchaAsync`, `RemoveRightsCaptchaAsync`
+- **Sign-in verification for rights requests** — `RightsIdentity.GetAsync`, `SetAsync`, `RemoveAsync` per site; the org default via `Org.RightsIdentityAsync`, `SetRightsIdentityAsync`, `RemoveRightsIdentityAsync`. Connect Clerk, Atlas or any JWKS issuer (`oidc_jwt`): a signed-in visitor is verified by their session, with no code mail
 - **Resellers** — `Reseller` (needs the `reseller:*` scopes)
 
 `ParityTests` keeps that true against `sdks/operations.json`, generated from the server's
@@ -32,8 +37,6 @@ using CookieMunch;
 
 // The org is derived server-side from the key — you never pass an orgId.
 using var client = new CookieMunchClient("fck_live_your_key_here");
-// Self-hosted? Pass your API origin:
-// using var client = new CookieMunchClient("fck_…", "https://cmp.example.com");
 
 Identity me = await client.MeAsync();
 Console.WriteLine($"{me.OrgId} / {me.Plan}");
@@ -42,6 +45,8 @@ Console.WriteLine($"{me.OrgId} / {me.Plan}");
 List<Site> sites = await client.Sites.ListAsync();
 Site site = await client.Sites.CreateAsync(new SiteCreate { Domain = "example.com" });
 InstallSnippet snip = await client.Sites.SnippetAsync(site.Cbid);
+// Consent-button parity: is "Accept all" pushed harder than "Reject all"? Nothing is saved.
+JsonObject lint = await client.Sites.LintConfigAsync(site.Cbid, new JsonObject { ["banner"] = new JsonObject { ["type"] = "accept-decline" } });
 
 // Consent analytics + audit
 List<ConsentDay> stats = await client.Consent.StatsAsync(site.Cbid, new RangeQuery { From = from, To = to });

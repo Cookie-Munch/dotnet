@@ -380,6 +380,91 @@ public sealed class ResellerResource : ResourceBase
         Client.SendAsync(HttpMethod.Delete, $"/v1/reseller/customers/{CookieMunchClient.Enc(id)}/keys/{CookieMunchClient.Enc(prefix)}", null, ct);
 }
 
+/// <summary>Account-linked rights requests: single-use links to the hosted rights page for a signed-in person.</summary>
+public sealed class RightsLinksResource : ResourceBase
+{
+    internal RightsLinksResource(CookieMunchClient client) : base(client) { }
+
+    /// <summary>
+    /// Mint a link (POST /v1/sites/:cbid/rights-links). The page locks the person's email and skips the
+    /// code step; show <c>url</c> only to them. <paramref name="ttlSeconds"/> is 60..3600 (default 900).
+    /// Needs dsar:write. The result carries <c>url</c> and <c>expiresAt</c>.
+    /// </summary>
+    public Task<JsonObject> CreateAsync(string cbid, string email, string? userId = null, IEnumerable<string>? rights = null, int? ttlSeconds = null, CancellationToken ct = default)
+    {
+        var subject = new JsonObject { ["email"] = email };
+        if (userId is not null) subject["userId"] = userId;
+        var body = new JsonObject { ["subject"] = subject };
+        if (rights is not null)
+        {
+            var list = new JsonArray();
+            foreach (var r in rights) list.Add(r);
+            body["rights"] = list;
+        }
+        if (ttlSeconds is not null) body["ttlSeconds"] = ttlSeconds;
+        return Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/rights-links", body, ct);
+    }
+}
+
+/// <summary>
+/// A site's rights-page captcha: your own Turnstile, hCaptcha or reCAPTCHA keys (recommended), or off. A site
+/// without its own setting uses the organisation default (<see cref="OrgResource.RightsCaptchaAsync"/>), else
+/// off. Cookie Munch's own captcha is never used on rights pages. Needs sites:read / sites:write.
+/// </summary>
+public sealed class RightsCaptchaResource : ResourceBase
+{
+    internal RightsCaptchaResource(CookieMunchClient client) : base(client) { }
+
+    /// <summary>The setting in force (GET /v1/sites/:cbid/rights-captcha; <c>source</c>: site, org or default). Never the secret.</summary>
+    public Task<JsonObject> GetAsync(string cbid, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/rights-captcha", null, ct);
+
+    /// <summary>
+    /// Set the site's own captcha (PUT /v1/sites/:cbid/rights-captcha). Keys: <c>mode</c> (<c>own</c> or <c>off</c>);
+    /// for own, <c>provider</c> (turnstile, hcaptcha, recaptcha_v2, recaptcha_v3), <c>siteKey</c> and <c>secret</c>
+    /// (write-only; leave out to keep the stored one) — the provider must accept the secret before it is saved;
+    /// <c>minScore</c> for recaptcha_v3 (0.1-0.9). Off removes spam protection beyond the spam-trap field, the rate
+    /// limits and the email code.
+    /// </summary>
+    public Task<JsonObject> SetAsync(string cbid, JsonObject input, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/rights-captcha", input, ct);
+
+    /// <summary>Remove the site's own setting (DELETE /v1/sites/:cbid/rights-captcha); it inherits the organisation default again. Returns the setting now in force.</summary>
+    public Task<JsonObject> RemoveAsync(string cbid, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/rights-captcha", null, ct);
+}
+
+/// <summary>
+/// A site's sign-in provider (Clerk, Atlas or any JWKS issuer): a visitor signed in to your site is verified by
+/// their session, with no code mail. A site without its own setting uses the organisation default
+/// (<see cref="OrgResource.RightsIdentityAsync"/>). Nothing here is secret. Needs sites:read / sites:write.
+/// </summary>
+public sealed class RightsIdentityResource : ResourceBase
+{
+    internal RightsIdentityResource(CookieMunchClient client) : base(client) { }
+
+    /// <summary>The setting in force (GET /v1/sites/:cbid/rights-identity; <c>source</c>: site, org or default).</summary>
+    public Task<JsonObject> GetAsync(string cbid, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/rights-identity", null, ct);
+
+    /// <summary>
+    /// Set the site's own sign-in provider (PUT /v1/sites/:cbid/rights-identity). Keys: <c>type</c> (clerk, atlas or
+    /// oidc_jwt) and <c>issuer</c> (exactly the token's iss) are required; <c>jwksUrl</c> is required for oidc_jwt
+    /// (clerk/atlas default to <c>&lt;issuer&gt;/.well-known/jwks.json</c>); <c>authorizedParties</c> (your own origins)
+    /// is required for clerk and atlas; optional <c>audience</c>, <c>emailClaim</c> (default email),
+    /// <c>emailVerifiedClaim</c> (default email_verified), <c>sessionCookieName</c> (default __session) and
+    /// <c>trustEmailClaim</c> (clerk/atlas only). oidc_jwt needs <c>audience</c> or <c>authorizedParties</c>. The JWKS is
+    /// fetched and checked before anything is saved. The token must carry the email and a verified-email claim set to
+    /// true, unless <c>trustEmailClaim</c> is true and the claim is absent.
+    /// </summary>
+    public Task<JsonObject> SetAsync(string cbid, JsonObject input, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/rights-identity", input, ct);
+
+    /// <summary>Remove the site's own setting (DELETE /v1/sites/:cbid/rights-identity); it inherits the organisation default again. Returns the setting now in force.</summary>
+    public Task<JsonObject> RemoveAsync(string cbid, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/rights-identity", null, ct);
+}
+
 /// <summary>One person's consent across every site in the org, by the subject id your apps attach (/v1/subjects).</summary>
 public sealed class SubjectsResource : ResourceBase
 {

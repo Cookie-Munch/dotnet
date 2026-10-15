@@ -58,6 +58,16 @@ public sealed class SitesResource : ResourceBase
     public Task<JsonObject> DryRunConfigAsync(string cbid, JsonObject config, bool replace = false, bool keepUnspecified = false, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(replace ? HttpMethod.Put : new HttpMethod("PATCH"), $"/v1/sites/{CookieMunchClient.Enc(cbid)}/config?dryRun=1{(replace && keepUnspecified ? "&keep=unspecified" : "")}", config, ct);
 
+    /// <summary>
+    /// Check a proposed config for consent-button parity without saving it
+    /// (POST /v1/sites/:cbid/config/lint): is "Accept all" more prominent than "Reject all"
+    /// anywhere (colour, size, placement, copy, custom CSS)? Returns <c>designWarnings</c>,
+    /// <c>score</c> (0-100) and <c>suggestedReject</c>. It checks exactly what the write would
+    /// store: merged as a PATCH would, or with <paramref name="replace"/> replaced as a PUT would. Needs only sites:read.
+    /// </summary>
+    public Task<JsonObject> LintConfigAsync(string cbid, JsonObject config, bool replace = false, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/config/lint{(replace ? "?replace=1" : "")}", config, ct);
+
     /// <summary>Latest categorized cookie declaration (GET /v1/sites/:cbid/cookies).</summary>
     public async Task<List<SiteCookie>> CookiesAsync(string cbid, CancellationToken ct = default)
     {
@@ -592,6 +602,61 @@ public sealed class OrgResource : ResourceBase
     /// </summary>
     public Task<Org> UpdateAsync(JsonObject patch, CancellationToken ct = default) =>
         Client.SendAsync<Org>(HttpMethod.Patch, "/v1/org", patch, ct);
+
+    /// <summary>
+    /// Your own mail provider for rights-request mail (GET /v1/org/mail-provider). Never returns the
+    /// credential, only <c>secretLast4</c>; <c>sender</c> says whether verification codes go through it
+    /// now (<c>own</c>) or are not mailed at all (<c>none</c>) — there is no shared sender.
+    /// </summary>
+    public Task<JsonObject> MailProviderAsync(CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, "/v1/org/mail-provider", null, ct);
+
+    /// <summary>
+    /// Connect your own mail provider (PUT /v1/org/mail-provider) — recommended. Keys: <c>provider</c>
+    /// (brevo, sendgrid, postmark, resend, ses, smtp), <c>fromEmail</c>, <c>fromName</c>, <c>replyTo</c>,
+    /// <c>secret</c> (write-only; leave out to keep the stored one, same provider only), <c>ses</c>
+    /// (<c>region</c>, <c>accessKeyId</c>) or <c>smtp</c> (<c>host</c>, <c>port</c>, <c>security</c>,
+    /// <c>username</c>). Replaces the stored one; it carries verification codes only after
+    /// <see cref="TestMailProviderAsync"/> succeeds.
+    /// </summary>
+    public Task<JsonObject> SetMailProviderAsync(JsonObject input, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Put, "/v1/org/mail-provider", input, ct);
+
+    /// <summary>
+    /// Send a test through your provider (POST /v1/org/mail-provider/test). A null <paramref name="to"/>
+    /// sends to the reply-to, else the from address. A refusal comes back as <c>ok: false</c>.
+    /// </summary>
+    public Task<JsonObject> TestMailProviderAsync(string? to = null, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/org/mail-provider/test",
+            to is null ? new JsonObject() : new JsonObject { ["to"] = to }, ct);
+
+    /// <summary>Remove your provider (DELETE /v1/org/mail-provider); no verification codes are mailed after this.</summary>
+    public Task RemoveMailProviderAsync(CancellationToken ct = default) =>
+        Client.SendAsync(HttpMethod.Delete, "/v1/org/mail-provider", null, ct);
+
+    /// <summary>The default captcha for your rights pages, for sites without their own (GET /v1/org/rights-captcha). Never the secret.</summary>
+    public Task<JsonObject> RightsCaptchaAsync(CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, "/v1/org/rights-captcha", null, ct);
+
+    /// <summary>Set the default (PUT /v1/org/rights-captcha): own keys (recommended) or off. Same keys as <see cref="RightsCaptchaResource.SetAsync"/>.</summary>
+    public Task<JsonObject> SetRightsCaptchaAsync(JsonObject input, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Put, "/v1/org/rights-captcha", input, ct);
+
+    /// <summary>Remove the default (DELETE /v1/org/rights-captcha): sites without their own setting have no captcha. Returns the setting now in force.</summary>
+    public Task<JsonObject> RemoveRightsCaptchaAsync(CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Delete, "/v1/org/rights-captcha", null, ct);
+
+    /// <summary>The default sign-in provider rights requests are verified with, for sites without their own (GET /v1/org/rights-identity).</summary>
+    public Task<JsonObject> RightsIdentityAsync(CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, "/v1/org/rights-identity", null, ct);
+
+    /// <summary>Set the default (PUT /v1/org/rights-identity). Same keys as <see cref="RightsIdentityResource.SetAsync"/>.</summary>
+    public Task<JsonObject> SetRightsIdentityAsync(JsonObject input, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Put, "/v1/org/rights-identity", input, ct);
+
+    /// <summary>Remove the default (DELETE /v1/org/rights-identity). Returns the setting now in force.</summary>
+    public Task<JsonObject> RemoveRightsIdentityAsync(CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Delete, "/v1/org/rights-identity", null, ct);
 }
 
 /// <summary>Images used by banners (/v1/assets).</summary>

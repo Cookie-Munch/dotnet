@@ -181,6 +181,160 @@ public class ClientTests
     }
 
     [Fact]
+    public async Task Org_mail_provider_get_set_test_remove()
+    {
+        var handler = MockHttpMessageHandler.Json(HttpStatusCode.OK, """{"configured":false,"sender":"none"}""");
+        using var client = MakeClient(handler);
+        const string url = "https://api.example.test/v1/org/mail-provider";
+
+        var got = await client.Org.MailProviderAsync();
+        Assert.Equal("none", got["sender"]?.GetValue<string>());
+        Assert.Equal(HttpMethod.Get, handler.LastRequest!.Method);
+        Assert.Equal(url, handler.LastRequest.RequestUri?.ToString());
+
+        await client.Org.SetMailProviderAsync(new JsonObject { ["provider"] = "brevo", ["fromEmail"] = "p@acme.com", ["secret"] = "xkeysib-1" });
+        Assert.Equal(HttpMethod.Put, handler.LastRequest!.Method);
+        Assert.Equal(url, handler.LastRequest.RequestUri?.ToString());
+        Assert.Contains("\"secret\":\"xkeysib-1\"", handler.LastBody);
+
+        await client.Org.TestMailProviderAsync("me@acme.com");
+        Assert.Equal(HttpMethod.Post, handler.LastRequest!.Method);
+        Assert.Equal(url + "/test", handler.LastRequest.RequestUri?.ToString());
+        Assert.Equal("""{"to":"me@acme.com"}""", handler.LastBody);
+        await client.Org.TestMailProviderAsync();
+        Assert.Equal("{}", handler.LastBody);
+
+        await client.Org.RemoveMailProviderAsync();
+        Assert.Equal(HttpMethod.Delete, handler.LastRequest!.Method);
+        Assert.Equal(url, handler.LastRequest.RequestUri?.ToString());
+    }
+
+    [Fact]
+    public async Task RightsIdentity_site_and_org_default_reach_their_routes()
+    {
+        var handler = MockHttpMessageHandler.Json(HttpStatusCode.OK, "{}");
+        using var client = MakeClient(handler);
+        const string site = "https://api.example.test/v1/sites/s1/rights-identity";
+        const string org = "https://api.example.test/v1/org/rights-identity";
+
+        await client.RightsIdentity.GetAsync("s 1");
+        Assert.Equal(HttpMethod.Get, handler.LastRequest!.Method);
+        Assert.Equal("https://api.example.test/v1/sites/s%201/rights-identity", handler.LastRequest.RequestUri?.AbsoluteUri);
+        await client.RightsIdentity.SetAsync("s1", new JsonObject
+        {
+            ["type"] = "clerk",
+            ["issuer"] = "https://clerk.acme.example",
+            ["authorizedParties"] = new JsonArray("https://www.acme.example"),
+        });
+        Assert.Equal(HttpMethod.Put, handler.LastRequest!.Method);
+        Assert.Equal(site, handler.LastRequest.RequestUri?.ToString());
+        Assert.Equal("""{"type":"clerk","issuer":"https://clerk.acme.example","authorizedParties":["https://www.acme.example"]}""", handler.LastBody);
+        await client.RightsIdentity.RemoveAsync("s1");
+        Assert.Equal(HttpMethod.Delete, handler.LastRequest!.Method);
+        Assert.Equal(site, handler.LastRequest.RequestUri?.ToString());
+
+        await client.Org.RightsIdentityAsync();
+        Assert.Equal(HttpMethod.Get, handler.LastRequest!.Method);
+        Assert.Equal(org, handler.LastRequest.RequestUri?.ToString());
+        await client.Org.SetRightsIdentityAsync(new JsonObject
+        {
+            ["type"] = "oidc_jwt",
+            ["issuer"] = "https://id.acme.example",
+            ["jwksUrl"] = "https://id.acme.example/keys",
+            ["sessionCookieName"] = "sid",
+        });
+        Assert.Equal(HttpMethod.Put, handler.LastRequest!.Method);
+        Assert.Equal(org, handler.LastRequest.RequestUri?.ToString());
+        Assert.Equal("""{"type":"oidc_jwt","issuer":"https://id.acme.example","jwksUrl":"https://id.acme.example/keys","sessionCookieName":"sid"}""", handler.LastBody);
+        await client.Org.RemoveRightsIdentityAsync();
+        Assert.Equal(HttpMethod.Delete, handler.LastRequest!.Method);
+        Assert.Equal(org, handler.LastRequest.RequestUri?.ToString());
+    }
+
+    [Fact]
+    public async Task RightsCaptcha_site_and_org_default_reach_their_routes()
+    {
+        var handler = MockHttpMessageHandler.Json(HttpStatusCode.OK, "{}");
+        using var client = MakeClient(handler);
+        const string site = "https://api.example.test/v1/sites/s1/rights-captcha";
+        const string org = "https://api.example.test/v1/org/rights-captcha";
+
+        await client.RightsCaptcha.GetAsync("s 1");
+        Assert.Equal(HttpMethod.Get, handler.LastRequest!.Method);
+        Assert.Equal("https://api.example.test/v1/sites/s%201/rights-captcha", handler.LastRequest.RequestUri?.AbsoluteUri);
+        await client.RightsCaptcha.SetAsync("s1", new JsonObject { ["mode"] = "own", ["provider"] = "hcaptcha", ["siteKey"] = "k-12345678", ["secret"] = "sec" });
+        Assert.Equal(HttpMethod.Put, handler.LastRequest!.Method);
+        Assert.Equal(site, handler.LastRequest.RequestUri?.ToString());
+        Assert.Contains("\"secret\":\"sec\"", handler.LastBody);
+        await client.RightsCaptcha.RemoveAsync("s1");
+        Assert.Equal(HttpMethod.Delete, handler.LastRequest!.Method);
+
+        await client.Org.RightsCaptchaAsync();
+        Assert.Equal(org, handler.LastRequest!.RequestUri?.ToString());
+        await client.Org.SetRightsCaptchaAsync(new JsonObject { ["mode"] = "off" });
+        Assert.Equal(HttpMethod.Put, handler.LastRequest!.Method);
+        Assert.Equal("""{"mode":"off"}""", handler.LastBody);
+        await client.Org.RemoveRightsCaptchaAsync();
+        Assert.Equal(HttpMethod.Delete, handler.LastRequest!.Method);
+        Assert.Equal(org, handler.LastRequest.RequestUri?.ToString());
+    }
+
+    [Fact]
+    public async Task Sites_lint_config_posts_to_lint_and_replace_adds_the_flag()
+    {
+        var handler = MockHttpMessageHandler.Json(HttpStatusCode.OK, "{\"mode\":\"merged\",\"designWarnings\":[],\"score\":100,\"suggestedReject\":[]}");
+        using var client = MakeClient(handler);
+
+        var r = await client.Sites.LintConfigAsync("s1", new JsonObject { ["banner"] = new JsonObject { ["type"] = "accept-only" } });
+        Assert.Equal(100, r["score"]!.GetValue<int>());
+        Assert.Equal(HttpMethod.Post, handler.LastRequest!.Method);
+        Assert.Equal("https://api.example.test/v1/sites/s1/config/lint", handler.LastRequest.RequestUri?.ToString());
+        Assert.Contains("\"type\":\"accept-only\"", handler.LastBody);
+
+        await client.Sites.LintConfigAsync("s1", new JsonObject { ["v"] = 2 }, replace: true);
+        Assert.Equal("https://api.example.test/v1/sites/s1/config/lint?replace=1", handler.LastRequest!.RequestUri?.ToString());
+    }
+
+    [Fact]
+    public async Task RightsPage_patch_keeps_null_and_dry_run_and_rollback_reach_their_routes()
+    {
+        var handler = MockHttpMessageHandler.Json(HttpStatusCode.OK, "{}");
+        using var client = MakeClient(handler);
+
+        await client.RightsPage.PatchAsync("s1", new JsonObject { ["customCss"] = null });
+        Assert.Contains("\"customCss\":null", handler.LastBody);
+        Assert.Equal(HttpMethod.Patch, handler.LastRequest!.Method);
+        Assert.Equal("https://api.example.test/v1/sites/s1/rights-page", handler.LastRequest.RequestUri?.ToString());
+
+        await client.RightsPage.DryRunAsync("s1", new JsonObject { ["v"] = 1 }, replace: true);
+        Assert.Equal(HttpMethod.Put, handler.LastRequest!.Method);
+        Assert.Equal("https://api.example.test/v1/sites/s1/rights-page?dryRun=1", handler.LastRequest.RequestUri?.ToString());
+
+        await client.RightsPage.RollbackAsync("s1", 2);
+        Assert.Equal("https://api.example.test/v1/sites/s1/rights-page/rollback", handler.LastRequest!.RequestUri?.ToString());
+        Assert.Contains("\"version\":2", handler.LastBody);
+    }
+
+    [Fact]
+    public async Task RightsPage_publish_and_rollback_send_baseUpdatedAt_including_null()
+    {
+        var handler = MockHttpMessageHandler.Json(HttpStatusCode.OK, "{}");
+        using var client = MakeClient(handler);
+
+        await client.RightsPage.PublishAsync("s1");
+        Assert.Equal("{}", handler.LastBody);
+        await client.RightsPage.PublishAsync("s1", 7L);
+        Assert.Equal("https://api.example.test/v1/sites/s1/rights-page/publish", handler.LastRequest!.RequestUri?.ToString());
+        Assert.Equal("{\"baseUpdatedAt\":7}", handler.LastBody);
+        await client.RightsPage.PublishAsync("s1", (System.Text.Json.Nodes.JsonNode?)null);
+        Assert.Equal("{\"baseUpdatedAt\":null}", handler.LastBody);
+        await client.RightsPage.RollbackAsync("s1", 2, "2026-10-14T00:00:00.000Z");
+        Assert.Equal("{\"version\":2,\"baseUpdatedAt\":\"2026-10-14T00:00:00.000Z\"}", handler.LastBody);
+        await client.RightsPage.RollbackAsync("s1", 2, (System.Text.Json.Nodes.JsonNode?)null);
+        Assert.Equal("{\"version\":2,\"baseUpdatedAt\":null}", handler.LastBody);
+    }
+
+    [Fact]
     public async Task Org_get_reads_the_organisation()
     {
         var handler = MockHttpMessageHandler.Json(HttpStatusCode.OK,
