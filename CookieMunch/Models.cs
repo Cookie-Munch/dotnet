@@ -52,6 +52,10 @@ public sealed record Site
     [JsonPropertyName("verifyToken")] public string? VerifyToken { get; init; }
     [JsonPropertyName("verifyMethod")] public string? VerifyMethod { get; init; }
     [JsonPropertyName("verifiedAt")] public long? VerifiedAt { get; init; }
+    /// <summary>The display name data subjects see; null when unset (the domain is shown).</summary>
+    [JsonPropertyName("name")] public string? Name { get; init; }
+    /// <summary>Other hosts serving the site: accepted consent origins, never verified claims.</summary>
+    [JsonPropertyName("aliases")] public List<string>? Aliases { get; init; }
 }
 
 /// <summary>Input for creating a site (cbid auto-generated when omitted).</summary>
@@ -148,7 +152,10 @@ public sealed record DsarRequest
     [JsonPropertyName("status")] public string Status { get; init; } = "";
     [JsonPropertyName("createdAt")] public long CreatedAt { get; init; }
     [JsonPropertyName("dueAt")] public long DueAt { get; init; }
+    /// <summary>INTERNAL: intake note plus the /erase and /export audit lines. Never shown to the subject.</summary>
     [JsonPropertyName("note")] public string? Note { get; init; }
+    /// <summary>The line the subject reads in the response notice.</summary>
+    [JsonPropertyName("messageToSubject")] public string? MessageToSubject { get; init; }
     /// <summary>True for a test request (off the SLA board, deletable).</summary>
     [JsonPropertyName("test")] public bool? Test { get; init; }
 }
@@ -160,6 +167,8 @@ public sealed record DsarCreate
     [JsonPropertyName("subjectEmail")] public required string SubjectEmail { get; init; }
     [JsonPropertyName("regulation")] public required string Regulation { get; init; }
     [JsonPropertyName("note")] public string? Note { get; init; }
+    /// <summary>The line the subject reads in the response notice (never an API key).</summary>
+    [JsonPropertyName("messageToSubject")] public string? MessageToSubject { get; init; }
     /// <summary>
     /// A test request: left out of SLA metrics and the deadline board, labelled as a test, and
     /// deletable with <see cref="DsarResource.DeleteAsync"/>.
@@ -428,6 +437,14 @@ public sealed record ApiKey
     [JsonPropertyName("prefix")] public string Prefix { get; init; } = "";
     [JsonPropertyName("createdAt")] public long? CreatedAt { get; init; }
     [JsonPropertyName("key")] public string? Key { get; init; }
+    /// <summary>Epoch ms the key stops working; null = never.</summary>
+    [JsonPropertyName("expiresAt")] public long? ExpiresAt { get; init; }
+    [JsonPropertyName("name")] public string? Name { get; init; }
+    /// <summary>Null = full access.</summary>
+    [JsonPropertyName("scopes")] public List<string>? Scopes { get; init; }
+    [JsonPropertyName("cbids")] public List<string>? Cbids { get; init; }
+    /// <summary>Epoch ms the key last authenticated a request (recorded at most hourly).</summary>
+    [JsonPropertyName("lastUsedAt")] public long? LastUsedAt { get; init; }
 }
 
 /// <summary>The key's organisation (GET /v1/org).</summary>

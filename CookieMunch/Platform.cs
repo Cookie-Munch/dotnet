@@ -42,7 +42,7 @@ public sealed record ResellerChildCreate(string Name, string? OwnerEmail = null,
 public sealed record ChildKeyInput(string? Name = null, List<string>? Scopes = null, List<string>? Cbids = null);
 
 /// <summary>A least-privilege API key: scopes, a property lock (<c>Cbids</c>), and an expiry of 1–3650 days.</summary>
-public sealed record ApiKeyIssueInput(string? Name = null, List<string>? Scopes = null, List<string>? Cbids = null, int? ExpiresInDays = null);
+public sealed record ApiKeyIssueInput(string? Name = null, List<string>? Scopes = null, List<string>? Cbids = null, int? ExpiresInDays = null, long? ExpiresAt = null);
 
 /// <summary>Tunes a generated policy.</summary>
 public sealed record PolicyOptions(string? ContactEmail = null, string? EffectiveDate = null, List<string>? Jurisdictions = null);
@@ -298,6 +298,60 @@ public sealed class FulfillmentResource : ResourceBase
         if (webhookSecret is not null) body["webhookSecret"] = webhookSecret;
         if (auto is not null) body["auto"] = auto.Value;
         return body;
+    }
+
+    /// <summary>
+    /// Connect a system from a versioned preset (POST /v1/dsar/executors with <c>preset</c>):
+    /// <c>atlas</c> (optional <c>atlasIdAppId</c>), <c>forumulate</c> (<c>orgId</c>),
+    /// <c>cm-standard-v1</c> (<c>baseUrl</c> and <c>system</c>) or <c>chatly</c>.
+    /// <paramref name="options"/> carries those and <c>presetVersion</c>, <c>webhookSecret</c>,
+    /// <c>auto</c>, <c>cbid</c>. The response carries <c>presetVersion</c> and <c>presetDiff</c>.
+    /// A preset waiting on another platform's API is refused with 409
+    /// <c>preset_waiting_on_platform</c>; see <see cref="ExecutorPresetsAsync"/>.
+    /// </summary>
+    public Task<JsonObject> ConnectExecutorPresetAsync(string preset, string secretKey, JsonObject? options = null, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/dsar/executors", PresetBody(preset, secretKey, options), ct);
+
+    /// <summary><see cref="ConnectExecutorPresetAsync"/> validated in full with nothing stored (?dryRun=1).</summary>
+    public Task<JsonObject> DryRunConnectExecutorPresetAsync(string preset, string secretKey, JsonObject? options = null, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/dsar/executors?dryRun=1", PresetBody(preset, secretKey, options), ct);
+
+    private static JsonObject PresetBody(string preset, string secretKey, JsonObject? options)
+    {
+        var body = new JsonObject { ["preset"] = preset, ["secretKey"] = secretKey };
+        if (options is not null)
+            foreach (var (k, v) in options) body[k] = v?.DeepClone();
+        return body;
+    }
+
+    /// <summary>
+    /// The versioned presets, whether each is usable now or waits on another platform, and the
+    /// organisation's canary address (GET /v1/dsar/executors/presets).
+    /// </summary>
+    public Task<JsonObject> ExecutorPresetsAsync(CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, "/v1/dsar/executors/presets", null, ct);
+
+    /// <summary>
+    /// Rebuild a connection from its preset's latest version (or <c>presetVersion</c>), keeping
+    /// its id and credential; <c>preset</c> adopts one on a hand-written connection (POST
+    /// /v1/dsar/executors/:id/upgrade-preset). Answers with a <c>diff</c>.
+    /// </summary>
+    public Task<JsonObject> UpgradeExecutorPresetAsync(string id, JsonObject? input = null, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}/upgrade-preset", input ?? new JsonObject(), ct);
+
+    /// <summary>What <see cref="UpgradeExecutorPresetAsync"/> would change; nothing is stored (?dryRun=1).</summary>
+    public Task<JsonObject> DryRunUpgradeExecutorPresetAsync(string id, JsonObject? input = null, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}/upgrade-preset?dryRun=1", input ?? new JsonObject(), ct);
+
+    /// <summary>
+    /// <see cref="TestExecutorAsync"/> with the organisation's canary address instead of a
+    /// person's — no real personal data. A canary locate also updates the connection's health.
+    /// </summary>
+    public Task<JsonObject> TestExecutorCanaryAsync(string id, string? operation = null, CancellationToken ct = default)
+    {
+        var body = new JsonObject { ["canary"] = true };
+        if (operation is not null) body["operation"] = operation;
+        return Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}/test", body, ct);
     }
 
     /// <summary>

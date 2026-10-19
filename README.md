@@ -129,6 +129,13 @@ catch (CookieMunchApiException ex)
   org-wide endpoint.
 - Identity, vault and profile reads are `POST`s so a person's identifiers never appear in
   a URL.
+- `Sites.UpdateAsync(cbid, new JsonObject { ["name"] = null })` clears a site's display name
+  (rename or move a site; the cbid and consent ledger stay). `IntegrationHealthAsync(cbid)` checks
+  every integration link; `ProvisionAsync(input, dryRun)` wires a product in one idempotent call and
+  returns no secret; `Sites.ListPartnersAsync` / `LinkPartnerAsync` / `UnlinkPartnerAsync` manage
+  partner links, with no secret.
+- `Keys.ReportAsync()` lists unused, broad and soon-expiring keys; `Keys.SetExpiryAsync(prefix, null)`
+  removes an expiry. Set `client.StrictUnknownFields = true` to have mistyped fields refused (`unknown_field`).
 
 ## License
 

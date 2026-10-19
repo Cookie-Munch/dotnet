@@ -165,6 +165,30 @@ public class PlatformTests
     }
 
     [Fact]
+    public async Task ExecutorPresetsCanaryAndUpgrade()
+    {
+        using var c = Client();
+        await c.Fulfillment.ExecutorPresetsAsync();
+        await c.Fulfillment.ConnectExecutorPresetAsync("forumulate", "fck_12345678", new JsonObject { ["orgId"] = "org-1" });
+        await c.Fulfillment.TestExecutorCanaryAsync("ex_1");
+        await c.Fulfillment.DryRunUpgradeExecutorPresetAsync("ex_1", new JsonObject { ["atlasIdAppId"] = "app_1" });
+        Assert.Equal(new[]
+        {
+            "GET https://api.example.test/v1/dsar/executors/presets",
+            "POST https://api.example.test/v1/dsar/executors",
+            "POST https://api.example.test/v1/dsar/executors/ex_1/test",
+            "POST https://api.example.test/v1/dsar/executors/ex_1/upgrade-preset?dryRun=1",
+        }, _calls.Select(x => $"{x.Method} {x.Url}").ToArray());
+        using var preset = JsonDocument.Parse(_calls[1].Body);
+        Assert.Equal("org-1", preset.RootElement.GetProperty("orgId").GetString());
+        Assert.Equal("forumulate", preset.RootElement.GetProperty("preset").GetString());
+        using var canary = JsonDocument.Parse(_calls[2].Body);
+        Assert.True(canary.RootElement.GetProperty("canary").GetBoolean());
+        using var up = JsonDocument.Parse(_calls[3].Body);
+        Assert.Equal("app_1", up.RootElement.GetProperty("atlasIdAppId").GetString());
+    }
+
+    [Fact]
     public async Task RetireAndUnretire()
     {
         using var c = Client(body: "{\"dryRun\":true,\"retired\":[]}");

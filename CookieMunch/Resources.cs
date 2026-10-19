@@ -26,9 +26,37 @@ public sealed class SitesResource : ResourceBase
     public Task<Site> GetAsync(string cbid, CancellationToken ct = default) =>
         Client.SendAsync<Site>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}", null, ct);
 
+    /// <summary>
+    /// Rename or move a site (PATCH /v1/sites/:cbid) with any of <c>domain</c>, <c>name</c> (a JSON
+    /// null clears it) and <c>aliases</c> (an empty array clears them). The cbid and the consent ledger
+    /// stay; a domain move clears verification. <paramref name="dryRun"/> answers with the diff and its
+    /// effects, storing nothing.
+    /// </summary>
+    public Task<JsonObject> UpdateAsync(string cbid, JsonObject patch, bool dryRun = false, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(new HttpMethod("PATCH"), $"/v1/sites/{CookieMunchClient.Enc(cbid)}{(dryRun ? "?dryRun=1" : "")}", patch, ct);
+
     /// <summary>Delete a site (DELETE /v1/sites/:cbid).</summary>
     public Task DeleteAsync(string cbid, CancellationToken ct = default) =>
         Client.SendAsync(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}", null, ct);
+
+    /// <summary>Partner links and the partner catalogue (GET /v1/sites/:cbid/partners).</summary>
+    public Task<JsonObject> ListPartnersAsync(string cbid, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/partners", null, ct);
+
+    /// <summary>
+    /// Grant a partner platform (<c>forumulate</c>, <c>atlas</c>) the site's consent events
+    /// (POST /v1/sites/:cbid/partners). No secret is created; a repeat is a no-op.
+    /// </summary>
+    public Task<JsonObject> LinkPartnerAsync(string cbid, string partner, string externalId, string? label = null, bool dryRun = false, CancellationToken ct = default)
+    {
+        var body = new JsonObject { ["partner"] = partner, ["externalId"] = externalId };
+        if (label is not null) body["label"] = label;
+        return Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/partners{(dryRun ? "?dryRun=1" : "")}", body, ct);
+    }
+
+    /// <summary>Revoke a partner link; deliveries stop at once (DELETE /v1/sites/:cbid/partners/:linkId).</summary>
+    public Task<JsonObject> UnlinkPartnerAsync(string cbid, string linkId, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/partners/{CookieMunchClient.Enc(linkId)}", null, ct);
 
     /// <summary>Get a site's config (GET /v1/sites/:cbid/config).</summary>
     public Task<JsonObject> GetConfigAsync(string cbid, CancellationToken ct = default) =>
@@ -202,9 +230,11 @@ public sealed class SitesResource : ResourceBase
     /// </summary>
     public Task<JsonObject> DeclareCookieAsync(string cbid, string name, string category, string purpose,
         string? provider = null, string? expiry = null, string? domain = null, bool? pattern = null,
-        IReadOnlyDictionary<string, string>? purposes = null, bool dryRun = false, CancellationToken ct = default)
+        IReadOnlyDictionary<string, string>? purposes = null, bool dryRun = false, string? type = null, CancellationToken ct = default)
     {
         var body = new JsonObject { ["category"] = category, ["purpose"] = purpose };
+        // localStorage, sessionStorage or indexedDB declares browser storage instead of a cookie.
+        if (type is not null) body["type"] = type;
         if (provider is not null) body["provider"] = provider;
         if (expiry is not null) body["expiry"] = expiry;
         if (domain is not null) body["domain"] = domain;
@@ -256,6 +286,45 @@ public sealed class SitesResource : ResourceBase
     /// <summary>What un-retiring would leave (<c>retired</c>), with nothing removed (…/retire?dryRun=1).</summary>
     public Task<JsonObject> UnretireCookieDryRunAsync(string cbid, string name, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/{CookieMunchClient.Enc(name)}/retire?dryRun=1", null, ct);
+
+    /// <summary>
+    /// Every declaration preset (GET /v1/sites/:cbid/cookies/presets): atlas, forumulate, chatly,
+    /// cookiemunch — parameters, what each declared here, and whether the vendor's manifest exists yet.
+    /// </summary>
+    public Task<JsonObject> CookiePresetsAsync(string cbid, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/presets", null, ct);
+
+    /// <summary>
+    /// Apply (or re-sync) a vendor preset (PUT /v1/sites/:cbid/cookies/presets/:vendor): declares what
+    /// that platform writes, marked <c>vendor</c>. Atlas takes <c>frontendApiHost</c>/<c>crossSubdomainCookies</c>;
+    /// Chatly <c>publicId</c>/<c>dragging</c>/<c>category</c>. Names you declared are kept (<c>skipped</c>).
+    /// </summary>
+    public Task<JsonObject> ApplyCookiePresetAsync(string cbid, string vendor, JsonObject? parameters = null, bool dryRun = false, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/presets/{CookieMunchClient.Enc(vendor)}{(dryRun ? "?dryRun=1" : "")}", parameters ?? new JsonObject(), ct);
+
+    /// <summary>Remove every declaration a vendor preset made (DELETE /v1/sites/:cbid/cookies/presets/:vendor).</summary>
+    public Task<JsonObject> RemoveCookiePresetAsync(string cbid, string vendor, bool dryRun = false, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/presets/{CookieMunchClient.Enc(vendor)}{(dryRun ? "?dryRun=1" : "")}", null, ct);
+
+    /// <summary>Remove every stored (scanned or observed) row of this name (DELETE /v1/sites/:cbid/observed-cookies/:name); a declaration stays.</summary>
+    public Task DeleteObservedCookieAsync(string cbid, string name, CancellationToken ct = default) =>
+        Client.SendAsync(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/observed-cookies/{CookieMunchClient.Enc(name)}", null, ct);
+
+    /// <summary>What deleting it would remove, with nothing removed (…/observed-cookies/:name?dryRun=1).</summary>
+    public Task<JsonObject> DeleteObservedCookieDryRunAsync(string cbid, string name, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/observed-cookies/{CookieMunchClient.Enc(name)}?dryRun=1", null, ct);
+
+    /// <summary>
+    /// Purge observed since T (POST /v1/sites/:cbid/observed-cookies/purge): remove every row a real
+    /// visit first reported at or after <paramref name="since"/> (and before <paramref name="until"/>),
+    /// ISO-8601. Crawled rows and declarations stay.
+    /// </summary>
+    public Task<JsonObject> PurgeObservedCookiesAsync(string cbid, string since, string? until = null, bool dryRun = false, CancellationToken ct = default)
+    {
+        var body = new JsonObject { ["since"] = since };
+        if (until is not null) body["until"] = until;
+        return Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/observed-cookies/purge{(dryRun ? "?dryRun=1" : "")}", body, ct);
+    }
 
     /// <summary>Remove a declaration (DELETE /v1/sites/:cbid/cookies/:name); the scanned classification applies again.</summary>
     public Task UndeclareCookieAsync(string cbid, string name, CancellationToken ct = default) =>
@@ -406,6 +475,10 @@ public sealed class DsarResource : ResourceBase
     /// <summary>Advance a DSAR to a new status (POST /v1/dsar/:id/advance). Use the <see cref="DsarStatus"/> constants.</summary>
     public Task<DsarResponse> AdvanceAsync(string id, string toStatus, CancellationToken ct = default) =>
         Client.SendAsync<DsarResponse>(HttpMethod.Post, $"/v1/dsar/{CookieMunchClient.Enc(id)}/advance", new { toStatus }, ct);
+
+    /// <summary>Advance a DSAR, replacing the line the subject reads in the notice.</summary>
+    public Task<DsarResponse> AdvanceAsync(string id, string toStatus, string messageToSubject, CancellationToken ct = default) =>
+        Client.SendAsync<DsarResponse>(HttpMethod.Post, $"/v1/dsar/{CookieMunchClient.Enc(id)}/advance", new { toStatus, messageToSubject }, ct);
 
     /// <summary>The subject-facing response notice for a request, as plain text (GET /v1/dsar/:id/response).</summary>
     public Task<string> ResponseAsync(string id, CancellationToken ct = default) =>
@@ -561,6 +634,24 @@ public sealed class KeysResource : ResourceBase
     /// </summary>
     public Task<JsonObject> UpdateAsync(string prefix, ApiKeyUpdate patch, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Patch, $"/v1/keys/{CookieMunchClient.Enc(prefix)}", patch, ct);
+
+    /// <summary>
+    /// Set a key's expiry (epoch ms) or, with null, remove it (PATCH /v1/keys/:prefix with <c>expiresAt</c>).
+    /// </summary>
+    public Task<JsonObject> SetExpiryAsync(string prefix, long? expiresAt, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Patch, $"/v1/keys/{CookieMunchClient.Enc(prefix)}", new JsonObject { ["expiresAt"] = expiresAt }, ct);
+
+    /// <summary>
+    /// Key hygiene (GET /v1/keys/report): keys unused for <paramref name="unusedDays"/> (default 90), keys
+    /// with broad access, and keys expiring within <paramref name="expiringDays"/> (default 14), each with a reason.
+    /// </summary>
+    public Task<JsonObject> ReportAsync(int? unusedDays = null, int? expiringDays = null, CancellationToken ct = default)
+    {
+        var q = new List<string>();
+        if (unusedDays is not null) q.Add($"unusedDays={unusedDays}");
+        if (expiringDays is not null) q.Add($"expiringDays={expiringDays}");
+        return Client.SendAsync<JsonObject>(HttpMethod.Get, "/v1/keys/report" + (q.Count > 0 ? "?" + string.Join("&", q) : ""), null, ct);
+    }
 }
 
 /// <summary>Webhook subscriptions.</summary>

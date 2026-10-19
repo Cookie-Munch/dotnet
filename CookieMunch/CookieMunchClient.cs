@@ -91,6 +91,12 @@ public sealed class CookieMunchClient : IDisposable
     public AssetsResource Assets { get; }
 
     /// <summary>
+    /// Send <c>Prefer: strict-unknown-fields</c> on writes: a body field the API does not declare
+    /// is refused (<c>400 unknown_field</c>) instead of ignored.
+    /// </summary>
+    public bool StrictUnknownFields { get; set; }
+
+    /// <summary>
     /// Create a client.
     /// </summary>
     /// <param name="apiKey">The API key (an <c>fck_…</c> token). Sent as both <c>Authorization: Bearer</c> and <c>X-API-Key</c>.</param>
@@ -180,6 +186,22 @@ public sealed class CookieMunchClient : IDisposable
         SendAsync<Usage>(HttpMethod.Get, "/v1/usage", null, ct);
 
     /// <summary>
+    /// Every link a site's privacy wiring depends on, one row each with <c>ok</c> (null = could not
+    /// check) and a <c>fixHint</c> (GET /v1/integration-health). <paramref name="cbid"/> may be null
+    /// when the org has one site.
+    /// </summary>
+    public Task<JsonObject> IntegrationHealthAsync(string? cbid = null, CancellationToken ct = default) =>
+        SendAsync<JsonObject>(HttpMethod.Get, "/v1/integration-health" + (cbid is null ? "" : "?cbid=" + Uri.EscapeDataString(cbid)), null, ct);
+
+    /// <summary>
+    /// Wire a product's privacy in one call — site, connected systems, Atlas, Forumulate (POST
+    /// /v1/provision). Idempotent; <paramref name="dryRun"/> writes nothing anywhere. Secrets in
+    /// <paramref name="input"/> are used for this request only; none is returned.
+    /// </summary>
+    public Task<JsonObject> ProvisionAsync(JsonObject input, bool dryRun = false, CancellationToken ct = default) =>
+        SendAsync<JsonObject>(HttpMethod.Post, "/v1/provision" + (dryRun ? "?dryRun=1" : ""), input, ct);
+
+    /// <summary>
     /// The org's audit log, newest first (GET /v1/audit): administrative changes made in the
     /// dashboard or through the API, and who made them — API actions as <c>apikey:&lt;prefix&gt;</c>.
     /// <paramref name="limit"/> is 1–500 and defaults to 200 server-side. Requires an unscoped key
@@ -229,6 +251,8 @@ public sealed class CookieMunchClient : IDisposable
         // path always begins with '/'; resolve against the origin (baseUri ends with '/').
         var uri = new Uri(_baseUri, path.TrimStart('/'));
         var req = new HttpRequestMessage(method, uri);
+        if (StrictUnknownFields && method != HttpMethod.Get)
+            req.Headers.TryAddWithoutValidation("Prefer", "strict-unknown-fields");
         if (body is not null)
         {
             var payload = JsonSerializer.Serialize(body, body.GetType(), Json);
