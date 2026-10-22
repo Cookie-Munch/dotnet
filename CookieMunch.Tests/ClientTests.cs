@@ -33,6 +33,23 @@ public class ClientTests
     }
 
     [Fact]
+    public async Task User_agent_names_the_sdk_and_version_and_the_callers_wins()
+    {
+        var handler = MockHttpMessageHandler.Json(HttpStatusCode.OK, "{}");
+        using (var client = MakeClient(handler))
+        {
+            await client.MeAsync();
+            Assert.Equal("cookiemunch-dotnet/0.1.0", handler.LastRequest!.Headers.UserAgent.ToString());
+        }
+
+        var http = new HttpClient(handler);
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("acme/2");
+        using var custom = new CookieMunchClient(ApiKey, "https://api.example.test", http);
+        await custom.MeAsync();
+        Assert.Equal("acme/2", handler.LastRequest!.Headers.UserAgent.ToString());
+    }
+
+    [Fact]
     public async Task Get_sites_parses_list_and_uses_get()
     {
         var handler = MockHttpMessageHandler.Json(HttpStatusCode.OK,

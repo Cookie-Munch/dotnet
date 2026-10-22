@@ -297,7 +297,7 @@ public sealed class SitesResource : ResourceBase
     /// <summary>
     /// Apply (or re-sync) a vendor preset (PUT /v1/sites/:cbid/cookies/presets/:vendor): declares what
     /// that platform writes, marked <c>vendor</c>. Atlas takes <c>frontendApiHost</c>/<c>crossSubdomainCookies</c>;
-    /// Chatly <c>publicId</c>/<c>dragging</c>/<c>category</c>. Names you declared are kept (<c>skipped</c>).
+    /// Chatly <c>publicId</c>/<c>dragging</c>/<c>category</c>; Referally <c>cookieDomain</c>/<c>cookieDays</c>/<c>category</c>. Names you declared are kept (<c>skipped</c>).
     /// </summary>
     public Task<JsonObject> ApplyCookiePresetAsync(string cbid, string vendor, JsonObject? parameters = null, bool dryRun = false, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/presets/{CookieMunchClient.Enc(vendor)}{(dryRun ? "?dryRun=1" : "")}", parameters ?? new JsonObject(), ct);
