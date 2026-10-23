@@ -83,6 +83,10 @@ public sealed class CookieMunchClient : IDisposable
     public RightsLinksResource RightsLinks { get; }
     /// <summary>A site's rights-page captcha: your own keys (recommended), or off.</summary>
     public RightsCaptchaResource RightsCaptcha { get; }
+    /// <summary>A site's consent-sync signing secret (hosted consent sync).</summary>
+    public ConsentSyncSecretResource ConsentSyncSecret { get; }
+    /// <summary>The hosted preference centre: mint a token for a visitor your server has signed in.</summary>
+    public PreferenceCenterResource PreferenceCenter { get; }
     /// <summary>A site's sign-in provider: a visitor signed in to your site is verified by their session, with no code mail.</summary>
     public RightsIdentityResource RightsIdentity { get; }
     /// <summary>The key's own organisation: name and logo.</summary>
@@ -147,6 +151,8 @@ public sealed class CookieMunchClient : IDisposable
         Subjects = new SubjectsResource(this);
         RightsLinks = new RightsLinksResource(this);
         RightsCaptcha = new RightsCaptchaResource(this);
+        ConsentSyncSecret = new ConsentSyncSecretResource(this);
+        PreferenceCenter = new PreferenceCenterResource(this);
         RightsIdentity = new RightsIdentityResource(this);
         Org = new OrgResource(this);
         Assets = new AssetsResource(this);

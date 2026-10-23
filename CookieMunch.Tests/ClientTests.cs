@@ -198,6 +198,28 @@ public class ClientTests
     }
 
     [Fact]
+    public async Task Org_controller_get_set_remove()
+    {
+        var handler = MockHttpMessageHandler.Json(HttpStatusCode.OK, """{"set":false,"updatedAt":null}""");
+        using var client = MakeClient(handler);
+        const string url = "https://api.example.test/v1/org/controller";
+
+        var got = await client.Org.ControllerAsync();
+        Assert.False(got["set"]?.GetValue<bool>());
+        Assert.Equal(HttpMethod.Get, handler.LastRequest!.Method);
+        Assert.Equal(url, handler.LastRequest.RequestUri?.ToString());
+
+        await client.Org.SetControllerAsync(new JsonObject { ["legalName"] = "Crossly Ltd", ["contactEmail"] = "p@crossly.example" });
+        Assert.Equal(HttpMethod.Put, handler.LastRequest!.Method);
+        Assert.Equal(url, handler.LastRequest.RequestUri?.ToString());
+        Assert.Equal("""{"legalName":"Crossly Ltd","contactEmail":"p@crossly.example"}""", handler.LastBody);
+
+        await client.Org.RemoveControllerAsync();
+        Assert.Equal(HttpMethod.Delete, handler.LastRequest!.Method);
+        Assert.Equal(url, handler.LastRequest.RequestUri?.ToString());
+    }
+
+    [Fact]
     public async Task Org_mail_provider_get_set_test_remove()
     {
         var handler = MockHttpMessageHandler.Json(HttpStatusCode.OK, """{"configured":false,"sender":"none"}""");
@@ -266,6 +288,35 @@ public class ClientTests
         await client.Org.RemoveRightsIdentityAsync();
         Assert.Equal(HttpMethod.Delete, handler.LastRequest!.Method);
         Assert.Equal(org, handler.LastRequest.RequestUri?.ToString());
+    }
+
+    [Fact]
+    public async Task ConsentSyncSecret_get_rotate_remove_reach_their_routes()
+    {
+        var handler = MockHttpMessageHandler.Json(HttpStatusCode.OK, "{}");
+        using var client = MakeClient(handler);
+        await client.ConsentSyncSecret.GetAsync("s 1");
+        Assert.Equal(HttpMethod.Get, handler.LastRequest!.Method);
+        Assert.Equal("https://api.example.test/v1/sites/s%201/consent-sync-secret", handler.LastRequest.RequestUri?.AbsoluteUri);
+        await client.ConsentSyncSecret.RotateAsync("s1");
+        Assert.Equal(HttpMethod.Post, handler.LastRequest!.Method);
+        Assert.Equal("https://api.example.test/v1/sites/s1/consent-sync-secret", handler.LastRequest.RequestUri?.ToString());
+        await client.ConsentSyncSecret.RemoveAsync("s1");
+        Assert.Equal(HttpMethod.Delete, handler.LastRequest!.Method);
+    }
+
+    [Fact]
+    public async Task PreferenceCenter_mint_token_sends_only_what_is_given()
+    {
+        var handler = MockHttpMessageHandler.Json(HttpStatusCode.Created, """{"token":"t","expiresAt":"2026-01-01T00:00:00.000Z"}""");
+        using var client = MakeClient(handler);
+        var res = await client.PreferenceCenter.MintTokenAsync("cb1", email: "a@x.com");
+        Assert.Equal("t", (string?)res["token"]);
+        Assert.Equal(HttpMethod.Post, handler.LastRequest!.Method);
+        Assert.Equal("https://api.example.test/v1/preference-center/tokens", handler.LastRequest.RequestUri?.ToString());
+        Assert.Equal("""{"cbid":"cb1","email":"a@x.com"}""", handler.LastBody);
+        await client.PreferenceCenter.MintTokenAsync("cb1", subjectId: "u1", ttlSeconds: 60);
+        Assert.Equal("""{"cbid":"cb1","subjectId":"u1","ttlSeconds":60}""", handler.LastBody);
     }
 
     [Fact]

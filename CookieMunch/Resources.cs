@@ -777,6 +777,25 @@ public sealed class OrgResource : ResourceBase
         Client.SendAsync<Org>(HttpMethod.Patch, "/v1/org", patch, ct);
 
     /// <summary>
+    /// Your organisation's own data-controller identity (GET /v1/org/controller). Every rights notice
+    /// names it, before any site config <c>controller</c> block. <c>set</c> is false when there is none.
+    /// </summary>
+    public Task<JsonObject> ControllerAsync(CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, "/v1/org/controller", null, ct);
+
+    /// <summary>
+    /// Set the organisation's data-controller identity (PUT /v1/org/controller). Keys: <c>legalName</c>
+    /// (required), <c>contactEmail</c>, <c>address</c>, <c>dpoContact</c>. Replaces the stored one: a key
+    /// left out is removed. Needs an unscoped key or <c>rights:write</c>.
+    /// </summary>
+    public Task<JsonObject> SetControllerAsync(JsonObject input, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Put, "/v1/org/controller", input, ct);
+
+    /// <summary>Remove the identity (DELETE /v1/org/controller); notices then name the site config <c>controller</c> block.</summary>
+    public Task RemoveControllerAsync(CancellationToken ct = default) =>
+        Client.SendAsync(HttpMethod.Delete, "/v1/org/controller", null, ct);
+
+    /// <summary>
     /// Your own mail provider for rights-request mail (GET /v1/org/mail-provider). Never returns the
     /// credential, only <c>secretLast4</c>; <c>sender</c> says whether verification codes go through it
     /// now (<c>own</c>) or are not mailed at all (<c>none</c>) — there is no shared sender.

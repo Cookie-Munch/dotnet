@@ -512,6 +512,53 @@ public sealed class RightsLinksResource : ResourceBase
     }
 }
 
+/// <summary>The hosted preference centre, opened for a visitor your server has signed in.</summary>
+public sealed class PreferenceCenterResource : ResourceBase
+{
+    internal PreferenceCenterResource(CookieMunchClient client) : base(client) { }
+
+    /// <summary>
+    /// Mint a preference-centre token (POST /v1/preference-center/tokens) for the page to pass to
+    /// <c>CookieMunch.setSubjectToken</c>. Give exactly one of <paramref name="email"/> (resolved as the emailed
+    /// preference link resolves it) or <paramref name="subjectId"/>. <paramref name="ttlSeconds"/> is 1..86400
+    /// (default 3600). The token is a credential: never put it in a shared URL or a log. Needs subscriptions:write
+    /// and profile:write, plus identity:read by email. The result carries <c>token</c> and <c>expiresAt</c>.
+    /// </summary>
+    public Task<JsonObject> MintTokenAsync(string cbid, string? email = null, string? subjectId = null, int? ttlSeconds = null, CancellationToken ct = default)
+    {
+        var body = new JsonObject { ["cbid"] = cbid };
+        if (email is not null) body["email"] = email;
+        if (subjectId is not null) body["subjectId"] = subjectId;
+        if (ttlSeconds is not null) body["ttlSeconds"] = ttlSeconds;
+        return Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/preference-center/tokens", body, ct);
+    }
+}
+
+/// <summary>
+/// A site's consent-sync signing secret. Your server signs consent-sync tokens with it so a signed-in visitor's
+/// consent decision follows them across browsers (hosted consent sync). Reading needs sites:read; rotate and
+/// remove need sites:write and consent:write.
+/// </summary>
+public sealed class ConsentSyncSecretResource : ResourceBase
+{
+    internal ConsentSyncSecretResource(CookieMunchClient client) : base(client) { }
+
+    /// <summary>Whether it is set up (GET /v1/sites/:cbid/consent-sync-secret): <c>configured</c>, <c>secretLast4</c>, <c>createdAt</c>. Never the secret.</summary>
+    public Task<JsonObject> GetAsync(string cbid, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/consent-sync-secret", null, ct);
+
+    /// <summary>
+    /// Mint the secret, or replace it (POST /v1/sites/:cbid/consent-sync-secret); the old one stops at once. The
+    /// answer's <c>secret</c> is shown this once: keep it on your server, never in a page.
+    /// </summary>
+    public Task<JsonObject> RotateAsync(string cbid, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/consent-sync-secret", null, ct);
+
+    /// <summary>Remove it (DELETE /v1/sites/:cbid/consent-sync-secret): hosted consent sync stops for the site.</summary>
+    public Task<JsonObject> RemoveAsync(string cbid, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/consent-sync-secret", null, ct);
+}
+
 /// <summary>
 /// A site's rights-page captcha: your own Turnstile, hCaptcha or reCAPTCHA keys (recommended), or off. A site
 /// without its own setting uses the organisation default (<see cref="OrgResource.RightsCaptchaAsync"/>), else
