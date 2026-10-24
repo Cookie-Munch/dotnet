@@ -53,6 +53,8 @@ public sealed class CookieMunchClient : IDisposable
     public MembersResource Members { get; }
     /// <summary>API-key management.</summary>
     public KeysResource Keys { get; }
+    /// <summary>The organisation's sandbox: a separate test organisation, never billed.</summary>
+    public SandboxResource Sandbox { get; }
     /// <summary>Webhook subscriptions.</summary>
     public WebhooksResource Webhooks { get; }
     /// <summary>Reusable account-level banner designs.</summary>
@@ -153,6 +155,7 @@ public sealed class CookieMunchClient : IDisposable
         Preferences = new PreferencesResource(this);
         Members = new MembersResource(this);
         Keys = new KeysResource(this);
+        Sandbox = new SandboxResource(this);
         Webhooks = new WebhooksResource(this);
         Banners = new BannersResource(this);
         Identity = new IdentityResource(this);
@@ -257,6 +260,13 @@ public sealed class CookieMunchClient : IDisposable
     /// </summary>
     public Task<JsonObject> EntitlementsAsync(CancellationToken ct = default) =>
         SendAsync<JsonObject>(HttpMethod.Get, "/v1/entitlements", null, ct);
+
+    /// <summary>
+    /// The dated API versions, what each changed, and the one this key is pinned to (<c>yours</c>)
+    /// (GET /v1/versions). Re-pin with <c>Keys.UpdateSelfAsync</c>.
+    /// </summary>
+    public Task<JsonObject> VersionsAsync(CancellationToken ct = default) =>
+        SendAsync<JsonObject>(HttpMethod.Get, "/v1/versions", null, ct);
 
     /// <summary>
     /// Every link a site's privacy wiring depends on, one row each with <c>ok</c> (null = could not

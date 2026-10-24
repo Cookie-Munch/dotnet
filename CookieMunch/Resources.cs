@@ -684,6 +684,28 @@ public sealed class MembersResource : ResourceBase
         Client.SendAsync(HttpMethod.Delete, $"/v1/members/{CookieMunchClient.Enc(userId)}", null, ct);
 }
 
+/// <summary>
+/// The organisation's sandbox (/v1/sandbox): a separate test organisation with the same people and
+/// plan features, never billed. Its keys are test keys and its rights requests are all tests.
+/// Create and Delete need a full-access key or <c>orgs:create</c>.
+/// </summary>
+public sealed class SandboxResource : ResourceBase
+{
+    internal SandboxResource(CookieMunchClient client) : base(client) { }
+
+    /// <summary>The sandbox, or null (GET /v1/sandbox). From a sandbox key, the sandbox itself.</summary>
+    public async Task<JsonObject?> GetAsync(CancellationToken ct = default) =>
+        (await Client.SendAsync<JsonObject>(HttpMethod.Get, "/v1/sandbox", null, ct).ConfigureAwait(false))?["sandbox"] as JsonObject;
+
+    /// <summary>Make the sandbox (or reuse it, <c>created: false</c>) and a new test key for it, shown once (POST /v1/sandbox).</summary>
+    public Task<JsonObject> CreateAsync(string? keyName = null, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/sandbox", keyName is null ? new JsonObject() : new JsonObject { ["keyName"] = keyName }, ct);
+
+    /// <summary>Erase the sandbox and everything in it (DELETE /v1/sandbox). Cannot be undone; the live organisation is not touched.</summary>
+    public Task<JsonObject> DeleteAsync(CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Delete, "/v1/sandbox", null, ct);
+}
+
 /// <summary>API-key management.</summary>
 public sealed class KeysResource : ResourceBase
 {
@@ -750,6 +772,10 @@ public sealed class KeysResource : ResourceBase
     public Task<JsonObject> SelfAsync(CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Get, "/v1/keys/self", null, ct);
 
+    /// <summary>Re-pin the calling key to another dated API version, any key, for itself (PATCH /v1/keys/self).</summary>
+    public Task<JsonObject> UpdateSelfAsync(string apiVersion, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Patch, "/v1/keys/self", new JsonObject { ["apiVersion"] = apiVersion }, ct);
+
     /// <summary>
     /// The calling key rotates itself (POST /v1/keys/self/roll). The old secret stops at once; set an
     /// <c>Idempotency-Key</c> in <see cref="CookieMunchClient.ExtraHeaders"/> so a lost answer replays.
@@ -767,6 +793,23 @@ public sealed class KeysResource : ResourceBase
         if (cbids is not null) body["cbids"] = new JsonArray(cbids.Select(s => (JsonNode?)JsonValue.Create(s)).ToArray());
         if (name is not null) body["name"] = name;
         return Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/keys/vend", body, ct);
+    }
+
+    /// <summary>
+    /// Swap an identity provider's token for a short-lived, scoped key (POST /v1/oauth/token, RFC 8693).
+    /// Needs no API key: the route never reads one, so a client made with any placeholder key works.
+    /// <paramref name="resource"/> is <c>org:&lt;id&gt;</c> or <c>site:&lt;cbid&gt;</c>.
+    /// </summary>
+    public Task<JsonObject> ExchangeOperatorTokenAsync(string subjectToken, List<string> scope, string resource, string subjectTokenType = "access_token", int? expiresIn = null, CancellationToken ct = default)
+    {
+        var body = new JsonObject
+        {
+            ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange", ["subject_token"] = subjectToken,
+            ["subject_token_type"] = "urn:ietf:params:oauth:token-type:" + subjectTokenType, ["scope"] = string.Join(" ", scope),
+            ["resource"] = resource, ["audience"] = "cookiemunch",
+        };
+        if (expiresIn is not null) body["expires_in"] = expiresIn;
+        return Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/oauth/token", body, ct);
     }
 
     /// <summary>Revoke a published secret (POST /v1/keys/revoke_leaked). Needs no valid key; always answers <c>received</c>.</summary>
