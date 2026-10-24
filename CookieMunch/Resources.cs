@@ -18,6 +18,10 @@ public sealed class SitesResource : ResourceBase
     public Task<List<Site>> ListAsync(CancellationToken ct = default) =>
         Client.SendAsync<List<Site>>(HttpMethod.Get, "/v1/sites", null, ct);
 
+    /// <summary>Sites with these tags (GET /v1/sites?metadata[k]=v).</summary>
+    public Task<List<Site>> ListTaggedAsync(IDictionary<string, string> metadata, CancellationToken ct = default) =>
+        Client.SendAsync<List<Site>>(HttpMethod.Get, "/v1/sites" + CookieMunchClient.MetaQuery(metadata), null, ct);
+
     /// <summary>Create a site; cbid is auto-generated when omitted (POST /v1/sites).</summary>
     public Task<Site> CreateAsync(SiteCreate input, CancellationToken ct = default) =>
         Client.SendAsync<Site>(HttpMethod.Post, "/v1/sites", input, ct);
@@ -38,6 +42,13 @@ public sealed class SitesResource : ResourceBase
     /// <summary>Delete a site (DELETE /v1/sites/:cbid).</summary>
     public Task DeleteAsync(string cbid, CancellationToken ct = default) =>
         Client.SendAsync(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}", null, ct);
+
+    /// <summary>
+    /// Purge a SANDBOX site (DELETE /v1/sites/:cbid?hard=1): its consent ledger, declarations and test
+    /// rights requests too. Anything not created as a sandbox is 403 <c>not_a_sandbox</c>.
+    /// </summary>
+    public Task<JsonObject> DeleteSandboxAsync(string cbid, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}?hard=1", null, ct);
 
     /// <summary>Partner links and the partner catalogue (GET /v1/sites/:cbid/partners).</summary>
     public Task<JsonObject> ListPartnersAsync(string cbid, CancellationToken ct = default) =>
@@ -183,6 +194,22 @@ public sealed class SitesResource : ResourceBase
         return Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/preview-token", body, ct);
     }
 
+    /// <summary>
+    /// The brand.json last imported for the site (GET /v1/sites/:cbid/brand): each role, the theme
+    /// token it sets, its <c>source</c> (<c>brand.json</c> or <c>site</c>), <c>ignored</c> and <c>warnings</c>.
+    /// </summary>
+    public Task<JsonObject> GetBrandAsync(string cbid, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/brand", null, ct);
+
+    /// <summary>
+    /// Import a DTCG brand.json into the banner theme and the rights page (PUT /v1/sites/:cbid/brand).
+    /// <paramref name="input"/> is <c>{"url": "https://…"}</c> or the document. Values the site set
+    /// itself are kept (brand.json &lt; site banner theme &lt; per-banner variant).
+    /// <paramref name="dryRun"/> saves nothing.
+    /// </summary>
+    public Task<JsonObject> SetBrandAsync(string cbid, JsonObject input, bool dryRun = false, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/brand{(dryRun ? "?dryRun=1" : "")}", input, ct);
+
     /// <summary>Suggest theme tokens by extracting the site's brand ("Match my site") (POST /v1/sites/:cbid/brand).</summary>
     public Task<BrandExtractionResult> BrandAsync(string cbid, CancellationToken ct = default) =>
         Client.SendAsync<BrandExtractionResult>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/brand", new { }, ct);
@@ -297,10 +324,25 @@ public sealed class SitesResource : ResourceBase
     /// <summary>
     /// Apply (or re-sync) a vendor preset (PUT /v1/sites/:cbid/cookies/presets/:vendor): declares what
     /// that platform writes, marked <c>vendor</c>. Atlas takes <c>frontendApiHost</c>/<c>crossSubdomainCookies</c>;
-    /// Chatly <c>publicId</c>/<c>dragging</c>/<c>category</c>; Referally <c>cookieDomain</c>/<c>cookieDays</c>/<c>category</c>. Names you declared are kept (<c>skipped</c>).
+    /// Chatly <c>publicId</c>/<c>dragging</c>/<c>category</c>; referral presets <c>cookieDomain</c>/<c>cookieDays</c>/<c>category</c> (referalli <c>legacyName</c>, impact <c>campaignId</c>). Names you declared are kept (<c>skipped</c>).
     /// </summary>
     public Task<JsonObject> ApplyCookiePresetAsync(string cbid, string vendor, JsonObject? parameters = null, bool dryRun = false, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/presets/{CookieMunchClient.Enc(vendor)}{(dryRun ? "?dryRun=1" : "")}", parameters ?? new JsonObject(), ct);
+
+    /// <summary>
+    /// Declare any vendor's cookies and storage from its embed manifest (PUT /v1/sites/:cbid/cookies/presets/custom)
+    /// with <c>url</c> or <c>manifest</c> (and <c>params</c>). The vendor id is the manifest's <c>product</c>.
+    /// </summary>
+    public Task<JsonObject> ImportCookieManifestAsync(string cbid, JsonObject input, bool dryRun = false, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/presets/custom{(dryRun ? "?dryRun=1" : "")}", input, ct);
+
+    /// <summary>What to declare (GET /v1/sites/:cbid/cookies/suggestions): detected vendors and one suggestion per undeclared row.</summary>
+    public Task<JsonObject> CookieSuggestionsAsync(string cbid, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/suggestions", null, ct);
+
+    /// <summary>Declare the suggestions (POST /v1/sites/:cbid/cookies/suggestions/declare) with optional <c>names</c> and <c>presets</c>. Run with <paramref name="dryRun"/> first.</summary>
+    public Task<JsonObject> DeclareCookieSuggestionsAsync(string cbid, JsonObject? input = null, bool dryRun = false, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/suggestions/declare{(dryRun ? "?dryRun=1" : "")}", input ?? new JsonObject(), ct);
 
     /// <summary>Remove every declaration a vendor preset made (DELETE /v1/sites/:cbid/cookies/presets/:vendor).</summary>
     public Task<JsonObject> RemoveCookiePresetAsync(string cbid, string vendor, bool dryRun = false, CancellationToken ct = default) =>
@@ -397,6 +439,16 @@ public sealed class ConsentResource : ResourceBase
         return res? ["valid"]?.GetValue<bool>() ?? false;
     }
 
+    /// <summary>
+    /// Opt-in by region and A/B variant, and the decision rate (GET /v1/sites/:cbid/consent/insights).
+    /// Language and time-to-decision are not recorded (null).
+    /// </summary>
+    public Task<JsonObject> InsightsAsync(string cbid, RangeQuery? query = null, CancellationToken ct = default)
+    {
+        var q = CookieMunchClient.BuildQuery(("from", query?.From), ("to", query?.To));
+        return Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/consent/insights{q}", null, ct);
+    }
+
     /// <summary>Aggregated per-day consent stats (GET /v1/sites/:cbid/consent/stats).</summary>
     public Task<List<ConsentDay>> StatsAsync(string cbid, RangeQuery? query = null, CancellationToken ct = default)
     {
@@ -430,6 +482,11 @@ public sealed class ConsentResource : ResourceBase
     public Task<SubjectExport> ExportSubjectAsync(string cbid, string stamp, CancellationToken ct = default) =>
         Client.SendAsync<SubjectExport>(HttpMethod.Get,
             $"/v1/sites/{CookieMunchClient.Enc(cbid)}/subject-export?stamp={CookieMunchClient.Enc(stamp)}", null, ct);
+
+    /// <summary>The reserved categories (support_chat, referrals) a site switches on with categories.suite:
+    /// stance, fallback, basis, wording in every banner language, known vendors. Public (GET /v1/categories/registry).</summary>
+    public Task<JsonObject> CategoryRegistryAsync(CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, "/v1/categories/registry", null, ct);
 
     /// <summary>
     /// Log a consent decision to the public, unauthenticated ingest endpoint (POST /api/v1/consent).
@@ -467,6 +524,38 @@ public sealed class DsarResource : ResourceBase
     /// </summary>
     public Task<JsonObject> MarkTestAsync(string id, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/dsar/{CookieMunchClient.Enc(id)}/mark-test", null, ct);
+
+    /// <summary>The request carrying one X-ForgeDeck-Trace (GET /v1/dsar?trace=).</summary>
+    public Task<List<JsonObject>> ListByTraceAsync(string trace, CancellationToken ct = default) =>
+        Client.SendAsync<List<JsonObject>>(HttpMethod.Get, $"/v1/dsar?trace={CookieMunchClient.Enc(trace)}", null, ct);
+
+    /// <summary>
+    /// Open a case fanned out to every connected system (POST /v1/dsar/requests). <paramref name="input"/>
+    /// keys: cbid, type (access, deletion, closure, restriction, rectification, or an alias: erasure,
+    /// erase, export), subject ({ emails, identity: { iss, sub, ext, principal } }), subjectToken, source
+    /// (product or atlas attest the person and need dsar:write; admin files it received), reason,
+    /// skipSystems, fulfill, test. <paramref name="idempotencyKey"/> (16–128 chars) makes a retry answer
+    /// the same case; <paramref name="trace"/> is kept as the case's X-ForgeDeck-Trace.
+    /// </summary>
+    public Task<JsonObject> OpenCaseAsync(JsonObject input, string? idempotencyKey = null, string? trace = null, CancellationToken ct = default)
+    {
+        var headers = new Dictionary<string, string>();
+        if (idempotencyKey is not null) headers["Idempotency-Key"] = idempotencyKey;
+        if (trace is not null) headers["X-ForgeDeck-Trace"] = trace;
+        return Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/dsar/requests", input, ct, headers);
+    }
+
+    /// <summary>One case across every system (GET /v1/dsar/requests/:id).</summary>
+    public Task<JsonObject> GetCaseAsync(string id, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/dsar/requests/{CookieMunchClient.Enc(id)}", null, ct);
+
+    /// <summary>Cancel a case before executeAfter (POST /v1/dsar/requests/:id/cancel). Every system keeps its data.</summary>
+    public Task<JsonObject> CancelCaseAsync(string id, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/dsar/requests/{CookieMunchClient.Enc(id)}/cancel", null, ct);
+
+    /// <summary>The signed (Ed25519) receipt for a case (GET /v1/dsar/requests/:id/receipt).</summary>
+    public Task<JsonObject> CaseReceiptAsync(string id, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/dsar/requests/{CookieMunchClient.Enc(id)}/receipt", null, ct);
 
     /// <summary>Create a DSAR (POST /v1/dsar).</summary>
     public Task<DsarResponse> CreateAsync(DsarCreate input, CancellationToken ct = default) =>
@@ -652,6 +741,41 @@ public sealed class KeysResource : ResourceBase
         if (expiringDays is not null) q.Add($"expiringDays={expiringDays}");
         return Client.SendAsync<JsonObject>(HttpMethod.Get, "/v1/keys/report" + (q.Count > 0 ? "?" + string.Join("&", q) : ""), null, ct);
     }
+
+    /// <summary>The suite-standard listing (GET /v1/keys?shape=standard).</summary>
+    public Task<JsonObject> ListStandardAsync(CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, "/v1/keys?shape=standard", null, ct);
+
+    /// <summary>The calling key itself, with any key (GET /v1/keys/self).</summary>
+    public Task<JsonObject> SelfAsync(CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, "/v1/keys/self", null, ct);
+
+    /// <summary>
+    /// The calling key rotates itself (POST /v1/keys/self/roll). The old secret stops at once; set an
+    /// <c>Idempotency-Key</c> in <see cref="CookieMunchClient.ExtraHeaders"/> so a lost answer replays.
+    /// </summary>
+    public Task<JsonObject> RollSelfAsync(CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/keys/self/roll", null, ct);
+
+    /// <summary>
+    /// A short-lived key, at most 12 hours, within this key's own scopes and properties (POST /v1/keys/vend).
+    /// Needs <c>keys:write</c> or a full-access key.
+    /// </summary>
+    public Task<JsonObject> VendAsync(List<string> scopes, int ttlSeconds, List<string>? cbids = null, string? name = null, CancellationToken ct = default)
+    {
+        var body = new JsonObject { ["scopes"] = new JsonArray(scopes.Select(s => (JsonNode?)JsonValue.Create(s)).ToArray()), ["ttlSeconds"] = ttlSeconds };
+        if (cbids is not null) body["cbids"] = new JsonArray(cbids.Select(s => (JsonNode?)JsonValue.Create(s)).ToArray());
+        if (name is not null) body["name"] = name;
+        return Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/keys/vend", body, ct);
+    }
+
+    /// <summary>Revoke a published secret (POST /v1/keys/revoke_leaked). Needs no valid key; always answers <c>received</c>.</summary>
+    public Task<JsonObject> RevokeLeakedAsync(string key, string? source = null, CancellationToken ct = default)
+    {
+        var body = new JsonObject { ["key"] = key };
+        if (source is not null) body["source"] = source;
+        return Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/keys/revoke_leaked", body, ct);
+    }
 }
 
 /// <summary>Webhook subscriptions.</summary>
@@ -708,6 +832,13 @@ public sealed class WebhooksResource : ResourceBase
     /// <summary>Deliver a dead-lettered event again, to the subscription as it is now (POST /v1/webhooks/dead-letters/:id/replay).</summary>
     public Task<JsonObject> ReplayDeadLetterAsync(string id, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/webhooks/dead-letters/{CookieMunchClient.Enc(id)}/replay", null, ct);
+
+    /// <summary>
+    /// Send what a failing or disabled endpoint missed since <paramref name="since"/> (epoch ms or ISO date),
+    /// oldest first, stopping at the first failure (POST /v1/webhooks/:id/replay).
+    /// </summary>
+    public Task<JsonObject> ReplayAsync(string id, string since, int? limit = null, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/webhooks/{CookieMunchClient.Enc(id)}/replay{CookieMunchClient.BuildQuery(("since", since), ("limit", limit))}", null, ct);
 
     private sealed record DeadLetterList
     {

@@ -253,6 +253,11 @@ public sealed class FulfillmentResource : ResourceBase
     public Task<List<JsonObject>> ExecutorsAsync(CancellationToken ct = default) =>
         Client.SendAsync<List<JsonObject>>(HttpMethod.Get, "/v1/dsar/executors", null, ct);
 
+    /// <summary>One connection with its full profile, never its credentials. Read it before changing the
+    /// profile: UpdateExecutorAsync replaces the whole profile.</summary>
+    public Task<JsonObject> ExecutorAsync(string id, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}", null, ct);
+
     /// <summary>
     /// Connect one. <paramref name="profile"/> describes that system's API — paths, the words
     /// it uses for export and erase, its status vocabulary, how it signs webhooks — so
@@ -334,7 +339,9 @@ public sealed class FulfillmentResource : ResourceBase
     /// <summary>
     /// Rebuild a connection from its preset's latest version (or <c>presetVersion</c>), keeping
     /// its id and credential; <c>preset</c> adopts one on a hand-written connection (POST
-    /// /v1/dsar/executors/:id/upgrade-preset). Answers with a <c>diff</c>.
+    /// /v1/dsar/executors/:id/upgrade-preset). Answers with a <c>diff</c>; your hand edits
+    /// (<c>profileOverrides</c>) are kept, and <c>acceptPreset</c> names the paths that take the
+    /// preset's value again.
     /// </summary>
     public Task<JsonObject> UpgradeExecutorPresetAsync(string id, JsonObject? input = null, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}/upgrade-preset", input ?? new JsonObject(), ct);
@@ -358,6 +365,8 @@ public sealed class FulfillmentResource : ResourceBase
     /// Change a connection in place (PATCH /v1/dsar/executors/:id). Only the keys present in
     /// <paramref name="patch"/> change; the credential is kept unless <c>secretKey</c> is given,
     /// and <c>"webhookSecret": null</c> removes it (a JsonObject keeps the null on the wire).
+    /// <c>"label"</c> names the credential (null removes it); <c>"presetPinned": true</c> stops
+    /// <see cref="UpgradeExecutorPresetAsync"/> changing a preset-built connection.
     /// </summary>
     public Task<JsonObject> UpdateExecutorAsync(string id, JsonObject patch, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Patch, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}", patch, ct);
@@ -388,11 +397,33 @@ public sealed class FulfillmentResource : ResourceBase
     }
 
     /// <summary>
+    /// Re-check a connection now: a canary test that records its health, for a deploy pipeline
+    /// (POST /v1/dsar/executors/:id/recheck).
+    /// </summary>
+    public Task<JsonObject> RecheckExecutorAsync(string id, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}/recheck", new JsonObject(), ct);
+
+    /// <summary>
+    /// A connection's last health checks, newest first; <paramref name="limit"/> 1 to 50
+    /// (GET /v1/dsar/executors/:id/health/history).
+    /// </summary>
+    public Task<List<JsonObject>> ExecutorHealthHistoryAsync(string id, int? limit = null, CancellationToken ct = default) =>
+        Client.SendAsync<List<JsonObject>>(HttpMethod.Get, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}/health/history" + CookieMunchClient.BuildQuery(("limit", limit)), null, ct);
+
+    /// <summary>
     /// The last 50 deliveries to a connection's webhook, newest first, each with its reason
     /// (GET /v1/dsar/executors/:id/webhook/deliveries).
     /// </summary>
     public Task<List<JsonObject>> ExecutorWebhookDeliveriesAsync(string id, CancellationToken ct = default) =>
         Client.SendAsync<List<JsonObject>>(HttpMethod.Get, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}/webhook/deliveries", null, ct);
+
+    /// <summary>Run the cm-standard-v2 conformance kit on the canary subject only (POST /v1/dsar/executors/:id/test { conformance: true }).</summary>
+    public Task<JsonObject> ExecutorConformanceAsync(string id, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}/test", new JsonObject { ["conformance"] = true }, ct);
+
+    /// <summary>A new completion secret, shown once; the old one keeps verifying for 24 hours (POST /v1/dsar/executors/:id/completion-secret/roll).</summary>
+    public Task<JsonObject> RollExecutorCompletionSecretAsync(string id, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}/completion-secret/roll", null, ct);
 
     /// <summary>
     /// Try a connection against one email without filing a request (POST
@@ -592,6 +623,39 @@ public sealed class RightsCaptchaResource : ResourceBase
 /// their session, with no code mail. A site without its own setting uses the organisation default
 /// (<see cref="OrgResource.RightsIdentityAsync"/>). Nothing here is secret. Needs sites:read / sites:write.
 /// </summary>
+/// <summary>A site's rights-request settings: graceDays (0–30; 7 for a new site, 0 until set for an existing one), how long an erasure or account closure waits before any system acts.</summary>
+public sealed class DsarSettingsResource : ResourceBase
+{
+    internal DsarSettingsResource(CookieMunchClient client) : base(client) { }
+
+    /// <summary>GET /v1/sites/:cbid/dsar-settings.</summary>
+    public Task<JsonObject> GetAsync(string cbid, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/dsar-settings", null, ct);
+
+    /// <summary>PUT /v1/sites/:cbid/dsar-settings. Applies to cases opened afterwards.</summary>
+    public Task<JsonObject> SetAsync(string cbid, int graceDays, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/dsar-settings", new JsonObject { ["graceDays"] = graceDays }, ct);
+}
+
+/// <summary>Cards for support, CRM and helpdesk sidebars.</summary>
+public sealed class IntegrationsResource : ResourceBase
+{
+    internal IntegrationsResource(CookieMunchClient client) : base(client) { }
+
+    /// <summary>
+    /// A person's open rights requests (GET /v1/integrations/:app/card), by iss and sub (preferred) or
+    /// email; nulls are left out. Never matched across identities on a shared email.
+    /// </summary>
+    public Task<JsonObject> SubjectCardAsync(string app, string? iss = null, string? sub = null, string? email = null, CancellationToken ct = default)
+    {
+        var q = new List<string>();
+        if (iss is not null) q.Add("iss=" + CookieMunchClient.Enc(iss));
+        if (sub is not null) q.Add("sub=" + CookieMunchClient.Enc(sub));
+        if (email is not null) q.Add("email=" + CookieMunchClient.Enc(email));
+        return Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/integrations/{CookieMunchClient.Enc(app)}/card{(q.Count > 0 ? "?" + string.Join("&", q) : "")}", null, ct);
+    }
+}
+
 public sealed class RightsIdentityResource : ResourceBase
 {
     internal RightsIdentityResource(CookieMunchClient client) : base(client) { }
@@ -627,3 +691,4 @@ public sealed class SubjectsResource : ResourceBase
     public Task<JsonObject> ConsentAsync(string subjectId, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/subjects/{CookieMunchClient.Enc(subjectId)}/consent", null, ct);
 }
+

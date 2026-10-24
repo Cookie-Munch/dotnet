@@ -172,12 +172,14 @@ public class PlatformTests
         await c.Fulfillment.ConnectExecutorPresetAsync("forumulate", "fck_12345678", new JsonObject { ["orgId"] = "org-1" });
         await c.Fulfillment.TestExecutorCanaryAsync("ex_1");
         await c.Fulfillment.DryRunUpgradeExecutorPresetAsync("ex_1", new JsonObject { ["atlasIdAppId"] = "app_1" });
+        await c.Fulfillment.ExecutorAsync("ex_1");
         Assert.Equal(new[]
         {
             "GET https://api.example.test/v1/dsar/executors/presets",
             "POST https://api.example.test/v1/dsar/executors",
             "POST https://api.example.test/v1/dsar/executors/ex_1/test",
             "POST https://api.example.test/v1/dsar/executors/ex_1/upgrade-preset?dryRun=1",
+            "GET https://api.example.test/v1/dsar/executors/ex_1",
         }, _calls.Select(x => $"{x.Method} {x.Url}").ToArray());
         using var preset = JsonDocument.Parse(_calls[1].Body);
         Assert.Equal("org-1", preset.RootElement.GetProperty("orgId").GetString());

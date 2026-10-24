@@ -89,10 +89,27 @@ public sealed class CookieMunchClient : IDisposable
     public PreferenceCenterResource PreferenceCenter { get; }
     /// <summary>A site's sign-in provider: a visitor signed in to your site is verified by their session, with no code mail.</summary>
     public RightsIdentityResource RightsIdentity { get; }
+    /// <summary>A site's rights-request settings: graceDays (0–30; 7 for a new site, 0 until set for an existing one). Needs dsar:read / dsar:write.</summary>
+    public DsarSettingsResource DsarSettings { get; }
+    /// <summary>Cards for support, CRM and helpdesk sidebars. Needs dsar:read.</summary>
+    public IntegrationsResource Integrations { get; }
     /// <summary>The key's own organisation: name and logo.</summary>
     public OrgResource Org { get; }
     /// <summary>Banner images.</summary>
     public AssetsResource Assets { get; }
+    /// <summary>Tags on created resources (/v1/metadata/{type}/{id}).</summary>
+    public MetadataResource Metadata { get; }
+    /// <summary>Suite-standard partner links (/v1/partner_links).</summary>
+    public PartnerLinksResource PartnerLinks { get; }
+
+    /// <summary>
+    /// <c>x25519:&lt;base64 public key&gt;</c>: once-shown secrets come back sealed (<c>sealed_secret</c>), never in plaintext.
+    /// Sent as <c>X-Secret-Recipient</c> on writes.
+    /// </summary>
+    public string? SecretRecipient { get; set; }
+
+    /// <summary>Extra headers on every request, e.g. <c>["Idempotency-Key"] = ref + ":" + run</c> on a client made for one create.</summary>
+    public Dictionary<string, string> ExtraHeaders { get; } = new();
 
     /// <summary>
     /// Send <c>Prefer: strict-unknown-fields</c> on writes: a body field the API does not declare
@@ -154,9 +171,51 @@ public sealed class CookieMunchClient : IDisposable
         ConsentSyncSecret = new ConsentSyncSecretResource(this);
         PreferenceCenter = new PreferenceCenterResource(this);
         RightsIdentity = new RightsIdentityResource(this);
+        DsarSettings = new DsarSettingsResource(this);
+        Integrations = new IntegrationsResource(this);
         Org = new OrgResource(this);
         Assets = new AssetsResource(this);
+        Metadata = new MetadataResource(this);
+        PartnerLinks = new PartnerLinksResource(this);
     }
+
+    /// <summary><c>?metadata[k]=v</c> tag filters for list endpoints.</summary>
+    internal static string MetaQuery(IDictionary<string, string>? metadata) =>
+        metadata is null || metadata.Count == 0 ? "" : "?" + string.Join("&", metadata.Select(kv => $"metadata%5B{Enc(kv.Key)}%5D={Enc(kv.Value)}"));
+
+    /// <summary>
+    /// <see cref="CreateOrgAsync(string, CancellationToken)"/> with options: <c>mintKey</c>, <c>keyScopes</c>
+    /// (required for an <c>orgs:create</c> key), <c>keyExpiresInDays</c> (default 365), <c>keyOwner</c>,
+    /// <c>externalRef</c>, <c>metadata</c>.
+    /// </summary>
+    public Task<JsonObject> CreateOrgAsync(string name, JsonObject options, CancellationToken ct = default)
+    {
+        var body = JsonNode.Parse(options.ToJsonString())!.AsObject();
+        body["name"] = name;
+        return SendAsync<JsonObject>(HttpMethod.Post, "/v1/orgs", body, ct);
+    }
+
+    /// <summary>Organisations with these tags (GET /v1/orgs?metadata[k]=v).</summary>
+    public Task<JsonObject> ListOrgsTaggedAsync(IDictionary<string, string> metadata, CancellationToken ct = default) =>
+        SendAsync<JsonObject>(HttpMethod.Get, "/v1/orgs" + MetaQuery(metadata), null, ct);
+
+    /// <summary>
+    /// Remove a SANDBOX organisation of this account (DELETE /v1/orgs/{id}?hard=1). Anything not created
+    /// with <c>metadata.forgedeck_sandbox</c> is 403 <c>not_a_sandbox</c>.
+    /// </summary>
+    public Task<JsonObject> DeleteSandboxOrgAsync(string id, CancellationToken ct = default) =>
+        SendAsync<JsonObject>(HttpMethod.Delete, $"/v1/orgs/{Enc(id)}?hard=1", null, ct);
+
+    /// <summary>
+    /// What <c>forgedeck env</c> writes for the product provisioned with this ref (GET /v1/provision/env):
+    /// names, non-secret values, and references for secrets.
+    /// </summary>
+    public Task<JsonObject> ProvisionEnvAsync(string @ref, CancellationToken ct = default) =>
+        SendAsync<JsonObject>(HttpMethod.Get, "/v1/provision/env?ref=" + Enc(@ref), null, ct);
+
+    /// <summary><see cref="ProvisionAsync"/> resuming from a stable step id (a version 2 body).</summary>
+    public Task<JsonObject> ProvisionFromAsync(JsonObject input, string fromStep, bool dryRun = false, CancellationToken ct = default) =>
+        SendAsync<JsonObject>(HttpMethod.Post, "/v1/provision?fromStep=" + Enc(fromStep) + (dryRun ? "&dryRun=1" : ""), input, ct);
 
     /// <summary>Identity / echo for SDK bootstrapping (GET /v1/me).</summary>
     public Task<Identity> MeAsync(CancellationToken ct = default) =>
@@ -192,12 +251,28 @@ public sealed class CookieMunchClient : IDisposable
         SendAsync<Usage>(HttpMethod.Get, "/v1/usage", null, ct);
 
     /// <summary>
+    /// What the org may use, from its plan (GET /v1/entitlements): every feature as
+    /// <c>{key, enabled}</c> and every limit as <c>limits.&lt;name&gt;</c> with <c>limit</c> (null =
+    /// unlimited) and <c>used</c> where metered. Any key may read it.
+    /// </summary>
+    public Task<JsonObject> EntitlementsAsync(CancellationToken ct = default) =>
+        SendAsync<JsonObject>(HttpMethod.Get, "/v1/entitlements", null, ct);
+
+    /// <summary>
     /// Every link a site's privacy wiring depends on, one row each with <c>ok</c> (null = could not
     /// check) and a <c>fixHint</c> (GET /v1/integration-health). <paramref name="cbid"/> may be null
     /// when the org has one site.
     /// </summary>
     public Task<JsonObject> IntegrationHealthAsync(string? cbid = null, CancellationToken ct = default) =>
         SendAsync<JsonObject>(HttpMethod.Get, "/v1/integration-health" + (cbid is null ? "" : "?cbid=" + Uri.EscapeDataString(cbid)), null, ct);
+
+    /// <summary>
+    /// The site's embed manifest (GET /v1/embed?cbid=): the tenant variant of
+    /// /.well-known/forgedeck-embed.json — every origin by CSP directive and every browser key the
+    /// embed writes for this site's config. Public: no key is needed.
+    /// </summary>
+    public Task<JsonObject> EmbedManifestAsync(string cbid, CancellationToken ct = default) =>
+        SendAsync<JsonObject>(HttpMethod.Get, "/v1/embed?cbid=" + Uri.EscapeDataString(cbid), null, ct);
 
     /// <summary>
     /// Wire a product's privacy in one call — site, connected systems, Atlas, Forumulate (POST
@@ -220,6 +295,41 @@ public sealed class CookieMunchClient : IDisposable
         return body.Entries;
     }
 
+    /// <summary>
+    /// One actor's audit rows (GET /v1/audit?actor=). <c>"self"</c> is the calling key's own rows,
+    /// the one form a scoped or property-locked key may read.
+    /// </summary>
+    public async Task<List<AuditEntry>> AuditAsync(int? limit, string actor, CancellationToken ct = default)
+    {
+        var body = await SendAsync<AuditLogPage>(
+            HttpMethod.Get, "/v1/audit" + BuildQuery(("limit", limit), ("actor", actor)), null, ct).ConfigureAwait(false);
+        return body.Entries;
+    }
+
+    /// <summary>Where the audit log is streamed as CloudEvents, never the secret (GET /v1/audit/sink).</summary>
+    public Task<JsonObject> GetAuditSinkAsync(CancellationToken ct = default) =>
+        SendAsync<JsonObject>(HttpMethod.Get, "/v1/audit/sink", null, ct);
+
+    /// <summary>Stream the audit log to an HTTPS endpoint (PUT /v1/audit/sink {type: "webhook", url, secret?}). A generated secret is returned once.</summary>
+    public Task<JsonObject> SetAuditSinkAsync(JsonObject input, CancellationToken ct = default) =>
+        SendAsync<JsonObject>(HttpMethod.Put, "/v1/audit/sink", input, ct);
+
+    /// <summary>Stop the audit-log export (DELETE /v1/audit/sink).</summary>
+    public Task RemoveAuditSinkAsync(CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Delete, "/v1/audit/sink", null, ct);
+
+    /// <summary>The checks the org chose not to meet (GET /v1/integration-health/waivers).</summary>
+    public Task<JsonObject> HealthWaiversAsync(string? cbid = null, CancellationToken ct = default) =>
+        SendAsync<JsonObject>(HttpMethod.Get, "/v1/integration-health/waivers" + BuildQuery(("cbid", cbid)), null, ct);
+
+    /// <summary>Waive a check (PUT /v1/integration-health/waivers {cbid?, check, subject?, reason, until?}). Audited.</summary>
+    public Task<JsonObject> SetHealthWaiverAsync(JsonObject input, CancellationToken ct = default) =>
+        SendAsync<JsonObject>(HttpMethod.Put, "/v1/integration-health/waivers", input, ct);
+
+    /// <summary>Remove a waiver (DELETE /v1/integration-health/waivers). cbid and subject may be null.</summary>
+    public Task RemoveHealthWaiverAsync(string check, string? cbid = null, string? subject = null, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Delete, "/v1/integration-health/waivers" + BuildQuery(("check", check), ("cbid", cbid), ("subject", subject)), null, ct);
+
     private sealed record AuditLogPage
     {
         [System.Text.Json.Serialization.JsonPropertyName("entries")]
@@ -228,9 +338,9 @@ public sealed class CookieMunchClient : IDisposable
 
     // ── transport ────────────────────────────────────────────────────────────
 
-    internal async Task<T> SendAsync<T>(HttpMethod method, string path, object? body, CancellationToken ct)
+    internal async Task<T> SendAsync<T>(HttpMethod method, string path, object? body, CancellationToken ct, IReadOnlyDictionary<string, string>? headers = null)
     {
-        using var res = await SendCoreAsync(method, path, body, ct).ConfigureAwait(false);
+        using var res = await SendCoreAsync(method, path, body, ct, headers).ConfigureAwait(false);
         await EnsureSuccessAsync(res, ct).ConfigureAwait(false);
         // 204 / empty body with a value-return call: surface as default (shouldn't happen for typed reads).
         if (res.StatusCode == HttpStatusCode.NoContent)
@@ -252,13 +362,19 @@ public sealed class CookieMunchClient : IDisposable
         return await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
     }
 
-    private Task<HttpResponseMessage> SendCoreAsync(HttpMethod method, string path, object? body, CancellationToken ct)
+    private Task<HttpResponseMessage> SendCoreAsync(HttpMethod method, string path, object? body, CancellationToken ct, IReadOnlyDictionary<string, string>? headers = null)
     {
         // path always begins with '/'; resolve against the origin (baseUri ends with '/').
         var uri = new Uri(_baseUri, path.TrimStart('/'));
         var req = new HttpRequestMessage(method, uri);
+        if (headers is not null)
+            foreach (var (k, v) in headers) req.Headers.TryAddWithoutValidation(k, v);
         if (StrictUnknownFields && method != HttpMethod.Get)
             req.Headers.TryAddWithoutValidation("Prefer", "strict-unknown-fields");
+        if (SecretRecipient is not null && method != HttpMethod.Get)
+            req.Headers.TryAddWithoutValidation("X-Secret-Recipient", SecretRecipient);
+        foreach (var kv in ExtraHeaders)
+            req.Headers.TryAddWithoutValidation(kv.Key, kv.Value);
         if (body is not null)
         {
             var payload = JsonSerializer.Serialize(body, body.GetType(), Json);
