@@ -12,7 +12,7 @@ public sealed class MetadataResource : ResourceBase
         Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/metadata/{CookieMunchClient.Enc(type)}/{CookieMunchClient.Enc(id)}", null, ct);
 
     /// <summary>
-    /// Merge tags (a JSON null removes one) (PATCH /v1/metadata/{type}/{id}). <c>forgedeck_sandbox</c> cannot
+    /// Merge tags (a JSON null removes one) (PATCH /v1/metadata/{type}/{id}). <c>stack_sandbox</c> cannot
     /// be set here. <paramref name="dryRun"/> answers with the diff.
     /// </summary>
     public Task<JsonObject> UpdateAsync(string type, string id, JsonObject metadata, bool dryRun = false, CancellationToken ct = default) =>

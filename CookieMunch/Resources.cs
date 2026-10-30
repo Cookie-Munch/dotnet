@@ -525,7 +525,7 @@ public sealed class DsarResource : ResourceBase
     public Task<JsonObject> MarkTestAsync(string id, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/dsar/{CookieMunchClient.Enc(id)}/mark-test", null, ct);
 
-    /// <summary>The request carrying one X-ForgeDeck-Trace (GET /v1/dsar?trace=).</summary>
+    /// <summary>The request carrying one X-Trace-Id (GET /v1/dsar?trace=).</summary>
     public Task<List<JsonObject>> ListByTraceAsync(string trace, CancellationToken ct = default) =>
         Client.SendAsync<List<JsonObject>>(HttpMethod.Get, $"/v1/dsar?trace={CookieMunchClient.Enc(trace)}", null, ct);
 
@@ -535,13 +535,13 @@ public sealed class DsarResource : ResourceBase
     /// erase, export), subject ({ emails, identity: { iss, sub, ext, principal } }), subjectToken, source
     /// (product or atlas attest the person and need dsar:write; admin files it received), reason,
     /// skipSystems, fulfill, test. <paramref name="idempotencyKey"/> (16–128 chars) makes a retry answer
-    /// the same case; <paramref name="trace"/> is kept as the case's X-ForgeDeck-Trace.
+    /// the same case; <paramref name="trace"/> is kept as the case's X-Trace-Id.
     /// </summary>
     public Task<JsonObject> OpenCaseAsync(JsonObject input, string? idempotencyKey = null, string? trace = null, CancellationToken ct = default)
     {
         var headers = new Dictionary<string, string>();
         if (idempotencyKey is not null) headers["Idempotency-Key"] = idempotencyKey;
-        if (trace is not null) headers["X-ForgeDeck-Trace"] = trace;
+        if (trace is not null) headers["X-Trace-Id"] = trace;
         return Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/dsar/requests", input, ct, headers);
     }
 

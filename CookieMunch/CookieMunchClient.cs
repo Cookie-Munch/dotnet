@@ -204,13 +204,13 @@ public sealed class CookieMunchClient : IDisposable
 
     /// <summary>
     /// Remove a SANDBOX organisation of this account (DELETE /v1/orgs/{id}?hard=1). Anything not created
-    /// with <c>metadata.forgedeck_sandbox</c> is 403 <c>not_a_sandbox</c>.
+    /// with <c>metadata.stack_sandbox</c> is 403 <c>not_a_sandbox</c>.
     /// </summary>
     public Task<JsonObject> DeleteSandboxOrgAsync(string id, CancellationToken ct = default) =>
         SendAsync<JsonObject>(HttpMethod.Delete, $"/v1/orgs/{Enc(id)}?hard=1", null, ct);
 
     /// <summary>
-    /// What <c>forgedeck env</c> writes for the product provisioned with this ref (GET /v1/provision/env):
+    /// What <c>env</c> writes for the product provisioned with this ref (GET /v1/provision/env):
     /// names, non-secret values, and references for secrets.
     /// </summary>
     public Task<JsonObject> ProvisionEnvAsync(string @ref, CancellationToken ct = default) =>
@@ -278,7 +278,7 @@ public sealed class CookieMunchClient : IDisposable
 
     /// <summary>
     /// The site's embed manifest (GET /v1/embed?cbid=): the tenant variant of
-    /// /.well-known/forgedeck-embed.json — every origin by CSP directive and every browser key the
+    /// /.well-known/cookiemunch-embed.json — every origin by CSP directive and every browser key the
     /// embed writes for this site's config. Public: no key is needed.
     /// </summary>
     public Task<JsonObject> EmbedManifestAsync(string cbid, CancellationToken ct = default) =>

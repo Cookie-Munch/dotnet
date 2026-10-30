@@ -312,18 +312,22 @@ public sealed class FulfillmentResource : ResourceBase
     /// <paramref name="options"/> carries those and <c>presetVersion</c>, <c>webhookSecret</c>,
     /// <c>auto</c>, <c>cbid</c>. The response carries <c>presetVersion</c> and <c>presetDiff</c>.
     /// A preset waiting on another platform's API is refused with 409
-    /// <c>preset_waiting_on_platform</c>; see <see cref="ExecutorPresetsAsync"/>.
+    /// <c>preset_waiting_on_platform</c>; see <see cref="ExecutorPresetsAsync"/>. A null
+    /// <paramref name="secretKey"/> with <c>mintFrom</c> in <paramref name="options"/> (a partner id that
+    /// registered an executorKeyUrl) has that partner mint the key for the site under its link;
+    /// <c>externalId</c> names the partner account.
     /// </summary>
-    public Task<JsonObject> ConnectExecutorPresetAsync(string preset, string secretKey, JsonObject? options = null, CancellationToken ct = default) =>
+    public Task<JsonObject> ConnectExecutorPresetAsync(string preset, string? secretKey, JsonObject? options = null, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/dsar/executors", PresetBody(preset, secretKey, options), ct);
 
     /// <summary><see cref="ConnectExecutorPresetAsync"/> validated in full with nothing stored (?dryRun=1).</summary>
-    public Task<JsonObject> DryRunConnectExecutorPresetAsync(string preset, string secretKey, JsonObject? options = null, CancellationToken ct = default) =>
+    public Task<JsonObject> DryRunConnectExecutorPresetAsync(string preset, string? secretKey, JsonObject? options = null, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/dsar/executors?dryRun=1", PresetBody(preset, secretKey, options), ct);
 
-    private static JsonObject PresetBody(string preset, string secretKey, JsonObject? options)
+    private static JsonObject PresetBody(string preset, string? secretKey, JsonObject? options)
     {
-        var body = new JsonObject { ["preset"] = preset, ["secretKey"] = secretKey };
+        var body = new JsonObject { ["preset"] = preset };
+        if (secretKey is not null) body["secretKey"] = secretKey;
         if (options is not null)
             foreach (var (k, v) in options) body[k] = v?.DeepClone();
         return body;
@@ -637,7 +641,7 @@ public sealed class DsarSettingsResource : ResourceBase
         Client.SendAsync<JsonObject>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/dsar-settings", new JsonObject { ["graceDays"] = graceDays }, ct);
 }
 
-/// <summary>Cards for support, CRM and helpdesk sidebars.</summary>
+/// <summary>Cards for support, CRM and helpdesk sidebars (dsar:read), and identity-provider connect (dsar:write).</summary>
 public sealed class IntegrationsResource : ResourceBase
 {
     internal IntegrationsResource(CookieMunchClient client) : base(client) { }
@@ -653,6 +657,20 @@ public sealed class IntegrationsResource : ResourceBase
         if (sub is not null) q.Add("sub=" + CookieMunchClient.Enc(sub));
         if (email is not null) q.Add("email=" + CookieMunchClient.Enc(email));
         return Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/integrations/{CookieMunchClient.Enc(app)}/card{(q.Count > 0 ? "?" + string.Join("&", q) : "")}", null, ct);
+    }
+
+    /// <summary>
+    /// Connect an identity provider's privacy orchestrator (POST /v1/integrations/:provider/connect): mints a
+    /// dsar:write key locked to <paramref name="cbid"/> and hands it to the provider, authorised with
+    /// <paramref name="providerKey"/>. The minted key is never returned, only its prefix. <paramref name="connector"/>
+    /// ({url, method, body}) only for a provider with no built-in connector. Needs dsar:write (no keys:write);
+    /// <paramref name="dryRun"/> mints and sends nothing.
+    /// </summary>
+    public Task<JsonObject> ConnectAsync(string provider, string cbid, string providerKey, JsonObject? connector = null, bool dryRun = false, CancellationToken ct = default)
+    {
+        var body = new JsonObject { ["cbid"] = cbid, ["providerKey"] = providerKey };
+        if (connector is not null) body["connector"] = connector.DeepClone();
+        return Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/integrations/{CookieMunchClient.Enc(provider)}/connect{(dryRun ? "?dryRun=1" : "")}", body, ct);
     }
 }
 
