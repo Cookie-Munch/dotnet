@@ -486,6 +486,14 @@ public sealed class RegulatoryResource : ResourceBase
 
     public Task<JsonObject> UpcomingAsync(int? days = null, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Get, "/v1/regulatory/upcoming" + CookieMunchClient.BuildQuery(("days", days)), null, ct);
+
+    /// <summary>
+    /// What takes effect within <paramref name="days"/> (null: 90) where at least <paramref name="minShare"/>
+    /// (null: 0.01) of the site's last 30 days of decisions came from (GET /v1/sites/:cbid/regulatory/upcoming).
+    /// Needs sites:read.
+    /// </summary>
+    public Task<JsonObject> UpcomingForSiteAsync(string cbid, int? days = null, double? minShare = null, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/regulatory/upcoming" + CookieMunchClient.BuildQuery(("days", days), ("minShare", minShare)), null, ct);
 }
 
 /// <summary>Provision and manage child orgs (/v1/reseller). Needs the reseller:* scopes.</summary>
