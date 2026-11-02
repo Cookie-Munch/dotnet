@@ -386,6 +386,15 @@ public sealed class FulfillmentResource : ResourceBase
         Client.SendAsync<JsonObject>(HttpMethod.Patch, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}", patch, ct);
 
     /// <summary>
+    /// Create or update the connection for a system from the same body as a create
+    /// (PUT /v1/dsar/executors). Re-running it changes nothing; a changed create-only field
+    /// answers 409 <c>immutable_field</c> naming every such field. The answer carries
+    /// <c>upserted</c>: <c>created</c> or <c>updated</c>.
+    /// </summary>
+    public Task<JsonObject> UpsertExecutorAsync(JsonObject body, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Put, "/v1/dsar/executors", body, ct);
+
+    /// <summary>
     /// The connection as <see cref="UpdateExecutorAsync"/> would leave it, and a diff, changing
     /// nothing (PATCH /v1/dsar/executors/:id?dryRun=1).
     /// </summary>
