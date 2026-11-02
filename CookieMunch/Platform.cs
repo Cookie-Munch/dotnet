@@ -671,6 +671,12 @@ public sealed class DsarSettingsResource : ResourceBase
     /// <summary>PUT /v1/sites/:cbid/dsar-settings. Applies to cases opened afterwards.</summary>
     public Task<JsonObject> SetAsync(string cbid, int graceDays, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/dsar-settings", new JsonObject { ["graceDays"] = graceDays }, ct);
+
+    /// <summary>PUT /v1/sites/:cbid/dsar-settings, changing only the keys given: graceDays, processing (this site is a processor:
+    /// { role: "processor", controllers: [...] }, null clears) and acceptForwardsFrom (processors that may open cases here, null clears).
+    /// A webhook secret is write-only.</summary>
+    public Task<JsonObject> UpdateAsync(string cbid, JsonObject settings, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/dsar-settings", settings, ct);
 }
 
 /// <summary>Cards for support, CRM and helpdesk sidebars (dsar:read), and identity-provider connect (dsar:write).</summary>

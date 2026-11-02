@@ -52,6 +52,8 @@ public sealed record Site
     [JsonPropertyName("verifyToken")] public string? VerifyToken { get; init; }
     [JsonPropertyName("verifyMethod")] public string? VerifyMethod { get; init; }
     [JsonPropertyName("verifiedAt")] public long? VerifiedAt { get; init; }
+    /// <summary>The last beacon from the domain or an alias (epoch ms, accurate to the hour); null before the first.</summary>
+    [JsonPropertyName("lastSeenAt")] public long? LastSeenAt { get; init; }
     /// <summary>The display name data subjects see; null when unset (the domain is shown).</summary>
     [JsonPropertyName("name")] public string? Name { get; init; }
     /// <summary>Other hosts serving the site: accepted consent origins, never verified claims.</summary>

@@ -344,6 +344,22 @@ public sealed class SitesResource : ResourceBase
     public Task<JsonObject> DeclareCookieSuggestionsAsync(string cbid, JsonObject? input = null, bool dryRun = false, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/suggestions/declare{(dryRun ? "?dryRun=1" : "")}", input ?? new JsonObject(), ct);
 
+    /// <summary>The site's own translation account (GET /v1/sites/:cbid/translation): provider, key last four and fingerprint. Never the key.</summary>
+    public Task<JsonObject> TranslationAsync(string cbid, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/translation", null, ct);
+
+    /// <summary>Connect the site's own DeepL or Google Cloud Translation key (PUT /v1/sites/:cbid/translation; <paramref name="provider"/> "deepl" or "google"). Stored sealed, never returned. <paramref name="verify"/> checks it first, sending no text.</summary>
+    public Task<JsonObject> ConnectTranslationAsync(string cbid, string provider, string key, bool verify = false, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/translation{(verify ? "?verify=1" : "")}", new JsonObject { ["provider"] = provider, ["key"] = key }, ct);
+
+    /// <summary>Remove the site's translation key (DELETE /v1/sites/:cbid/translation). Translations already stored stay.</summary>
+    public Task<JsonObject> DisconnectTranslationAsync(string cbid, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/translation", null, ct);
+
+    /// <summary>Machine-translate the missing purposes of the site's own cookie rows on its connected account (POST /v1/sites/:cbid/cookies/translate) with optional <c>languages</c> and <c>names</c>. Never overwrites a row's text; <paramref name="dryRun"/> calls no provider.</summary>
+    public Task<JsonObject> TranslateCookiesAsync(string cbid, JsonObject? input = null, bool dryRun = false, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/translate{(dryRun ? "?dryRun=1" : "")}", input ?? new JsonObject(), ct);
+
     /// <summary>Remove every declaration a vendor preset made (DELETE /v1/sites/:cbid/cookies/presets/:vendor).</summary>
     public Task<JsonObject> RemoveCookiePresetAsync(string cbid, string vendor, bool dryRun = false, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/presets/{CookieMunchClient.Enc(vendor)}{(dryRun ? "?dryRun=1" : "")}", null, ct);
