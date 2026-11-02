@@ -536,8 +536,12 @@ public sealed record WebhookSubscription
     [JsonPropertyName("id")] public string Id { get; init; } = "";
     [JsonPropertyName("orgId")] public string OrgId { get; init; } = "";
     [JsonPropertyName("url")] public string Url { get; init; } = "";
+    /// <summary>Only on the create answer, and only when Cookie Munch generated it.</summary>
     [JsonPropertyName("secret")] public string? Secret { get; init; }
+    /// <summary>The patterns as given: event names, <c>*</c>, <c>&lt;family&gt;.*</c>.</summary>
     [JsonPropertyName("events")] public IReadOnlyList<string> Events { get; init; } = Array.Empty<string>();
+    /// <summary>The events those patterns take today. A wildcard also takes events added later.</summary>
+    [JsonPropertyName("matches")] public IReadOnlyList<string> Matches { get; init; } = Array.Empty<string>();
     [JsonPropertyName("cbid")] public string? Cbid { get; init; }
     [JsonPropertyName("active")] public bool Active { get; init; }
     [JsonPropertyName("createdAt")] public long CreatedAt { get; init; }
@@ -547,8 +551,11 @@ public sealed record WebhookSubscription
 public sealed record WebhookCreate
 {
     [JsonPropertyName("url")] public required string Url { get; init; }
+    /// <summary>Event names, <c>*</c> (every event) or <c>&lt;family&gt;.*</c> such as <c>dsar.*</c>.</summary>
     [JsonPropertyName("events")] public required IReadOnlyList<string> Events { get; init; }
     [JsonPropertyName("cbid")] public string? Cbid { get; init; }
+    /// <summary>Your own signing secret (32–256 printable characters). Not echoed back; null has one generated.</summary>
+    [JsonPropertyName("secret")] public string? Secret { get; init; }
 }
 
 /// <summary>A lightweight summary of an account-level banner (GET /v1/banners).</summary>

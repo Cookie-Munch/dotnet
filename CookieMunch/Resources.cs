@@ -529,6 +529,10 @@ public sealed class DsarResource : ResourceBase
     public Task<List<JsonObject>> ListByTraceAsync(string trace, CancellationToken ct = default) =>
         Client.SendAsync<List<JsonObject>>(HttpMethod.Get, $"/v1/dsar?trace={CookieMunchClient.Enc(trace)}", null, ct);
 
+    /// <summary>The requests with one origin (GET /v1/dsar?origin=): <c>account_deletion</c>, those a person's own account deletion opened.</summary>
+    public Task<List<JsonObject>> ListByOriginAsync(string origin, CancellationToken ct = default) =>
+        Client.SendAsync<List<JsonObject>>(HttpMethod.Get, $"/v1/dsar?origin={CookieMunchClient.Enc(origin)}", null, ct);
+
     /// <summary>
     /// Open a case fanned out to every connected system (POST /v1/dsar/requests). <paramref name="input"/>
     /// keys: cbid, type (access, deletion, closure, restriction, rectification, or an alias: erasure,
@@ -855,6 +859,17 @@ public sealed class WebhooksResource : ResourceBase
         var body = await Client.SendAsync<JsonObject>(
             HttpMethod.Post, $"/v1/webhooks/{CookieMunchClient.Enc(id)}/roll", null, ct).ConfigureAwait(false);
         return body["secret"]?.GetValue<string>() ?? "";
+    }
+
+    /// <summary>
+    /// Rotate a subscription's signing secret to one you chose, 32–256 printable characters
+    /// (POST /v1/webhooks/:id/roll). The secret is not echoed; true when it was rolled.
+    /// </summary>
+    public async Task<bool> RollSecretAsync(string id, string secret, CancellationToken ct = default)
+    {
+        var body = await Client.SendAsync<JsonObject>(
+            HttpMethod.Post, $"/v1/webhooks/{CookieMunchClient.Enc(id)}/roll", new JsonObject { ["secret"] = secret }, ct).ConfigureAwait(false);
+        return body["rolled"]?.GetValue<bool>() ?? false;
     }
 
     /// <summary>Send a signed test event now and report what the endpoint answered (POST /v1/webhooks/:id/test).</summary>

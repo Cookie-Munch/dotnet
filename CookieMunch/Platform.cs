@@ -320,7 +320,17 @@ public sealed class FulfillmentResource : ResourceBase
     public Task<JsonObject> ConnectExecutorPresetAsync(string preset, string? secretKey, JsonObject? options = null, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/dsar/executors", PresetBody(preset, secretKey, options), ct);
 
-    /// <summary><see cref="ConnectExecutorPresetAsync"/> validated in full with nothing stored (?dryRun=1).</summary>
+    /// <summary>
+    /// <see cref="ConnectExecutorPresetAsync(string, string, JsonObject, CancellationToken)"/> probed before it is
+    /// stored (?verify=): a canary locate, never an erasure. <c>"1"</c> refuses a failing connection
+    /// (422 <c>verify_failed</c>, nothing stored); <c>"warn"</c> stores it with the verdict in <c>warnings</c>.
+    /// <paramref name="options"/> may carry <c>requireApproval: true</c>, which parks its erasures until
+    /// <see cref="ApproveTaskAsync"/>.
+    /// </summary>
+    public Task<JsonObject> ConnectExecutorPresetAsync(string preset, string? secretKey, JsonObject? options, string verify, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/dsar/executors" + CookieMunchClient.BuildQuery(("verify", verify)), PresetBody(preset, secretKey, options), ct);
+
+    /// <summary><see cref="ConnectExecutorPresetAsync(string, string, JsonObject, CancellationToken)"/> validated in full with nothing stored (?dryRun=1).</summary>
     public Task<JsonObject> DryRunConnectExecutorPresetAsync(string preset, string? secretKey, JsonObject? options = null, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/dsar/executors?dryRun=1", PresetBody(preset, secretKey, options), ct);
 
@@ -456,6 +466,20 @@ public sealed class FulfillmentResource : ResourceBase
     public Task<JsonObject> TaskAsync(string requestId, string taskId, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Get,
             $"/v1/dsar/{CookieMunchClient.Enc(requestId)}/tasks/{CookieMunchClient.Enc(taskId)}", null, ct);
+
+    /// <summary>Send an erasure that was awaiting approval (POST /v1/dsar/{id}/tasks/{taskId}/approve). Audited.</summary>
+    public Task<JsonObject> ApproveTaskAsync(string requestId, string taskId, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post,
+            $"/v1/dsar/{CookieMunchClient.Enc(requestId)}/tasks/{CookieMunchClient.Enc(taskId)}/approve", null, ct);
+
+    /// <summary>Refuse it (POST /v1/dsar/{id}/tasks/{taskId}/reject): nothing is sent, the task fails with <paramref name="reason"/>. Audited.</summary>
+    public Task<JsonObject> RejectTaskAsync(string requestId, string taskId, string? reason = null, CancellationToken ct = default)
+    {
+        var body = new JsonObject();
+        if (reason is not null) body["reason"] = reason;
+        return Client.SendAsync<JsonObject>(HttpMethod.Post,
+            $"/v1/dsar/{CookieMunchClient.Enc(requestId)}/tasks/{CookieMunchClient.Enc(taskId)}/reject", body, ct);
+    }
 
     /// <summary>Disconnect a system; its open sub-tasks stop being driven.</summary>
     public Task DisconnectExecutorAsync(string id, CancellationToken ct = default) =>
