@@ -689,6 +689,29 @@ public sealed class MembersResource : ResourceBase
 }
 
 /// <summary>
+/// Audit anchoring (/v1/anchors): post the head of your own hash-chained log and keep the signed receipt.
+/// <c>seq</c> must strictly increase per stream; the same seq and head again returns the original receipt,
+/// a different head for an anchored seq is a 409 (<c>anchor_head_mismatch</c>). Create needs
+/// <c>anchors:write</c>; List and Get need <c>anchors:read</c>.
+/// </summary>
+public sealed class AnchorsResource : ResourceBase
+{
+    internal AnchorsResource(CookieMunchClient client) : base(client) { }
+
+    /// <summary>Anchor <paramref name="head"/> at <paramref name="seq"/> on <paramref name="stream"/> (POST /v1/anchors). Signed with the key in /v1/partner/jwks.json.</summary>
+    public Task<JsonObject> CreateAsync(string stream, string head, long seq, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/anchors", new JsonObject { ["stream"] = stream, ["head"] = head, ["seq"] = seq }, ct);
+
+    /// <summary>A stream's receipts, newest first (GET /v1/anchors/{stream}): <c>{stream, anchors, nextBefore}</c>. Pass <c>nextBefore</c> as <paramref name="before"/> until it is null.</summary>
+    public Task<JsonObject> ListAsync(string stream, int? limit = null, long? before = null, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/anchors/{CookieMunchClient.Enc(stream)}" + CookieMunchClient.BuildQuery(("limit", limit), ("before", before)), null, ct);
+
+    /// <summary>One receipt (GET /v1/anchors/{stream}/{id}).</summary>
+    public Task<JsonObject> GetAsync(string stream, string id, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/anchors/{CookieMunchClient.Enc(stream)}/{CookieMunchClient.Enc(id)}", null, ct);
+}
+
+/// <summary>
 /// The organisation's sandbox (/v1/sandbox): a separate test organisation with the same people and
 /// plan features, never billed. Its keys are test keys and its rights requests are all tests.
 /// Create and Delete need a full-access key or <c>orgs:create</c>.

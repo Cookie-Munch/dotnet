@@ -55,6 +55,8 @@ public sealed class CookieMunchClient : IDisposable
     public KeysResource Keys { get; }
     /// <summary>The organisation's sandbox: a separate test organisation, never billed.</summary>
     public SandboxResource Sandbox { get; }
+    /// <summary>Audit anchoring: signed receipts for the head of your own hash-chained log.</summary>
+    public AnchorsResource Anchors { get; }
     /// <summary>Webhook subscriptions.</summary>
     public WebhooksResource Webhooks { get; }
     /// <summary>Reusable account-level banner designs.</summary>
@@ -156,6 +158,7 @@ public sealed class CookieMunchClient : IDisposable
         Members = new MembersResource(this);
         Keys = new KeysResource(this);
         Sandbox = new SandboxResource(this);
+        Anchors = new AnchorsResource(this);
         Webhooks = new WebhooksResource(this);
         Banners = new BannersResource(this);
         Identity = new IdentityResource(this);
