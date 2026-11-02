@@ -344,6 +344,10 @@ public sealed class SitesResource : ResourceBase
     public Task<JsonObject> DeclareCookieSuggestionsAsync(string cbid, JsonObject? input = null, bool dryRun = false, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/suggestions/declare{(dryRun ? "?dryRun=1" : "")}", input ?? new JsonObject(), ct);
 
+    /// <summary>Plan a provisioning run, storing nothing (POST /v1/sites/:cbid/cookies/plan) with optional <c>cookies</c>, <c>replace</c> and <c>presets</c> (vendor → params): the declarations PUT, then each preset in key order. Answers <c>dryRun, steps, declared, count, diff</c>.</summary>
+    public Task<JsonObject> PlanCookiesAsync(string cbid, JsonObject? input = null, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/plan", input ?? new JsonObject(), ct);
+
     /// <summary>The site's own translation account (GET /v1/sites/:cbid/translation): provider, key last four and fingerprint. Never the key.</summary>
     public Task<JsonObject> TranslationAsync(string cbid, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/translation", null, ct);
