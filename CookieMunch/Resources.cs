@@ -260,7 +260,7 @@ public sealed class SitesResource : ResourceBase
         IReadOnlyDictionary<string, string>? purposes = null, bool dryRun = false, string? type = null, CancellationToken ct = default)
     {
         var body = new JsonObject { ["category"] = category, ["purpose"] = purpose };
-        // localStorage, sessionStorage or indexedDB declares browser storage instead of a cookie.
+        // localStorage, sessionStorage or indexedDB declares browser storage instead of a cookie; none a cookieless processor.
         if (type is not null) body["type"] = type;
         if (provider is not null) body["provider"] = provider;
         if (expiry is not null) body["expiry"] = expiry;
