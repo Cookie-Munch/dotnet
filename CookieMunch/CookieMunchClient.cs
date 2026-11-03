@@ -358,8 +358,29 @@ public sealed class CookieMunchClient : IDisposable
         // 204 / empty body with a value-return call: surface as default (shouldn't happen for typed reads).
         if (res.StatusCode == HttpStatusCode.NoContent)
             return default!;
-        var value = await res.Content.ReadFromJsonAsync<T>(Json, ct).ConfigureAwait(false);
+        var text = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        var version = res.Headers.TryGetValues("CookieMunch-Version", out var vs) ? vs.FirstOrDefault() : null;
+        var value = JsonSerializer.Deserialize<T>(UnwrapList(version, text), Json);
         return value ?? throw new CookieMunchApiException((int)res.StatusCode, "", "empty response body");
+    }
+
+    /// <summary>From API version 2026-11-03 a list answers <c>{"data": [...]}</c> (plus <c>next</c>); hand back the array either way.</summary>
+    internal static string UnwrapList(string? version, string text)
+    {
+        if (version is null || string.CompareOrdinal(version, "2026-11-03") < 0) return text;
+        try
+        {
+            using var doc = JsonDocument.Parse(text);
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array) return text;
+            foreach (var p in root.EnumerateObject())
+                if (p.Name != "data" && p.Name != "next") return text;
+            return data.GetRawText();
+        }
+        catch (JsonException)
+        {
+            return text;
+        }
     }
 
     internal async Task SendAsync(HttpMethod method, string path, object? body, CancellationToken ct)

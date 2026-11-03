@@ -32,6 +32,22 @@ public class ClientTests
         Assert.Equal("https://api.example.test/v1/me", handler.LastRequest.RequestUri?.ToString());
     }
 
+    [Theory]
+    [InlineData("2026-11-03", """{"data":[{"cbid":"cb_1"}],"next":"1"}""")]
+    [InlineData("2026-01-01", """[{"cbid":"cb_1"}]""")]
+    public async Task List_reads_take_either_shape(string version, string body)
+    {
+        var handler = new MockHttpMessageHandler((_, _) =>
+        {
+            var r = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") };
+            r.Headers.Add("CookieMunch-Version", version);
+            return r;
+        });
+        using var client = MakeClient(handler);
+        var sites = await client.Sites.ListAsync();
+        Assert.Equal("cb_1", Assert.Single(sites).Cbid);
+    }
+
     [Fact]
     public async Task User_agent_names_the_sdk_and_version_and_the_callers_wins()
     {
