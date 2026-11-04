@@ -364,6 +364,10 @@ public sealed class SitesResource : ResourceBase
     public Task<JsonObject> TranslateCookiesAsync(string cbid, JsonObject? input = null, bool dryRun = false, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/translate{(dryRun ? "?dryRun=1" : "")}", input ?? new JsonObject(), ct);
 
+    /// <summary>Machine-translate the site's own banner and category copy into the <c>i18n.overrides</c> languages it lacks, on its connected account (POST /v1/sites/:cbid/config/translate) with optional <c>languages</c>. Never overwrites a person's text; <paramref name="dryRun"/> calls no provider.</summary>
+    public Task<JsonObject> TranslateConfigAsync(string cbid, JsonObject? input = null, bool dryRun = false, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/config/translate{(dryRun ? "?dryRun=1" : "")}", input ?? new JsonObject(), ct);
+
     /// <summary>Remove every declaration a vendor preset made (DELETE /v1/sites/:cbid/cookies/presets/:vendor).</summary>
     public Task<JsonObject> RemoveCookiePresetAsync(string cbid, string vendor, bool dryRun = false, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/presets/{CookieMunchClient.Enc(vendor)}{(dryRun ? "?dryRun=1" : "")}", null, ct);
