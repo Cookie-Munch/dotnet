@@ -121,6 +121,14 @@ public sealed class SitesResource : ResourceBase
         Client.SendAsync<ScanResult>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/scan", null, ct);
 
     /// <summary>
+    /// A signed-in crawl (POST /v1/sites/:cbid/scan with cookies): <paramref name="cookies"/> is a
+    /// test account's Cookie header value ("sid=abc; csrf=def"), set only on the site's own hosts
+    /// and never stored or returned.
+    /// </summary>
+    public Task<ScanResult> ScanSignedInAsync(string cbid, string cookies, CancellationToken ct = default) =>
+        Client.SendAsync<ScanResult>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/scan", new { cookies }, ct);
+
+    /// <summary>
     /// Start a cookie crawl and hold the request until it is done or failed, or until
     /// <paramref name="wait"/> (at most 60 s) runs out (POST /v1/sites/:cbid/scan?wait=).
     /// </summary>
@@ -324,7 +332,7 @@ public sealed class SitesResource : ResourceBase
     /// <summary>
     /// Apply (or re-sync) a vendor preset (PUT /v1/sites/:cbid/cookies/presets/:vendor): declares what
     /// that platform writes, marked <c>vendor</c>. Atlas takes <c>frontendApiHost</c>/<c>crossSubdomainCookies</c>/<c>publishableKey</c>;
-    /// Chatly <c>publicId</c>/<c>dragging</c>/<c>storage</c>/<c>tracking</c>/<c>category</c>; referral presets <c>cookieDomain</c>/<c>cookieDays</c>/<c>category</c> (referalli <c>legacyName</c>, impact <c>campaignId</c>). Names you declared are kept (<c>skipped</c>).
+    /// Chatly <c>publicId</c>/<c>dragging</c>/<c>storage</c>/<c>tracking</c>/<c>category</c>; referral presets <c>cookieDomain</c>/<c>cookieDays</c>/<c>category</c> (referalli <c>legacyName</c>, impact <c>campaignId</c>); lucida <c>publicKey</c>/<c>cookieDomain</c>/<c>category</c>, hermetica <c>storage</c> ("localStorage" or "cookie")/<c>category</c>, watchtower <c>category</c>. Names you declared are kept (<c>skipped</c>).
     /// </summary>
     public Task<JsonObject> ApplyCookiePresetAsync(string cbid, string vendor, JsonObject? parameters = null, bool dryRun = false, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Put, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/presets/{CookieMunchClient.Enc(vendor)}{(dryRun ? "?dryRun=1" : "")}", parameters ?? new JsonObject(), ct);
@@ -1041,7 +1049,7 @@ public sealed class OrgResource : ResourceBase
 
     /// <summary>
     /// Connect your own mail provider (PUT /v1/org/mail-provider) — recommended. Keys: <c>provider</c>
-    /// (brevo, sendgrid, postmark, resend, ses, smtp), <c>fromEmail</c>, <c>fromName</c>, <c>replyTo</c>,
+    /// (brevo, sendgrid, postmark, resend, ses, smtp, hermetica), <c>fromEmail</c>, <c>fromName</c>, <c>replyTo</c>,
     /// <c>secret</c> (write-only; leave out to keep the stored one, same provider only), <c>ses</c>
     /// (<c>region</c>, <c>accessKeyId</c>) or <c>smtp</c> (<c>host</c>, <c>port</c>, <c>security</c>,
     /// <c>username</c>). Replaces the stored one; it carries verification codes only after

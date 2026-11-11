@@ -315,7 +315,8 @@ public sealed class FulfillmentResource : ResourceBase
     /// <c>preset_waiting_on_platform</c>; see <see cref="ExecutorPresetsAsync"/>. A null
     /// <paramref name="secretKey"/> with <c>mintFrom</c> in <paramref name="options"/> (a partner id that
     /// registered an executorKeyUrl) has that partner mint the key for the site under its link;
-    /// <c>externalId</c> names the partner account.
+    /// <c>externalId</c> names the partner account. <paramref name="options"/> may carry <c>params</c>, an object of
+    /// any of the preset's params by name (<c>programId</c> for referalli, <c>projectId</c> for lucida).
     /// </summary>
     public Task<JsonObject> ConnectExecutorPresetAsync(string preset, string? secretKey, JsonObject? options = null, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Post, "/v1/dsar/executors", PresetBody(preset, secretKey, options), ct);
@@ -349,6 +350,13 @@ public sealed class FulfillmentResource : ResourceBase
     /// </summary>
     public Task<JsonObject> ExecutorPresetsAsync(CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Get, "/v1/dsar/executors/presets", null, ct);
+
+    /// <summary>
+    /// The platforms a site's cookie rows and partner links imply that have no connected system yet,
+    /// with each preset's availability (GET /v1/dsar/executors/suggestions). Null cbid: every site the key reaches.
+    /// </summary>
+    public Task<JsonObject> ExecutorSuggestionsAsync(string? cbid = null, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, "/v1/dsar/executors/suggestions" + CookieMunchClient.BuildQuery(("cbid", cbid)), null, ct);
 
     /// <summary>
     /// Rebuild a connection from its preset's latest version (or <c>presetVersion</c>), keeping
@@ -443,6 +451,10 @@ public sealed class FulfillmentResource : ResourceBase
     /// <summary>Run the cm-standard-v2 conformance kit on the canary subject only (POST /v1/dsar/executors/:id/test { conformance: true }).</summary>
     public Task<JsonObject> ExecutorConformanceAsync(string id, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}/test", new JsonObject { ["conformance"] = true }, ct);
+
+    /// <summary>The connection's current completion secret and completionUrl, read again (GET /v1/dsar/executors/:id/completion-secret; dsar:write, audited).</summary>
+    public Task<JsonObject> GetExecutorCompletionSecretAsync(string id, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/dsar/executors/{CookieMunchClient.Enc(id)}/completion-secret", null, ct);
 
     /// <summary>A new completion secret, shown once; the old one keeps verifying for 24 hours (POST /v1/dsar/executors/:id/completion-secret/roll).</summary>
     public Task<JsonObject> RollExecutorCompletionSecretAsync(string id, CancellationToken ct = default) =>
@@ -745,6 +757,10 @@ public sealed class RightsIdentityResource : ResourceBase
     /// <summary>Remove the site's own setting (DELETE /v1/sites/:cbid/rights-identity); it inherits the organisation default again. Returns the setting now in force.</summary>
     public Task<JsonObject> RemoveAsync(string cbid, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/rights-identity", null, ct);
+
+    /// <summary>Check one session token as the rights intake would (POST /v1/sites/:cbid/rights-identity/check): <c>verified</c>, <c>reason</c>, <c>jwt</c>, <c>detail</c>, <c>claims</c>. Files nothing.</summary>
+    public Task<JsonObject> CheckAsync(string cbid, string token, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/rights-identity/check", new JsonObject { ["token"] = token }, ct);
 }
 
 /// <summary>One person's consent across every site in the org, by the subject id your apps attach (/v1/subjects).</summary>

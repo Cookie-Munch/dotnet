@@ -319,6 +319,17 @@ public sealed class CookieMunchClient : IDisposable
         return body.Entries;
     }
 
+    /// <summary>
+    /// Audit rows at or after <paramref name="since"/>, an ISO 8601 time or epoch ms (GET /v1/audit?since=), for a log shipper. An
+    /// unscoped key or <c>audit:read</c>. <paramref name="actor"/> may be null.
+    /// </summary>
+    public async Task<List<AuditEntry>> AuditSinceAsync(string since, int? limit = null, string? actor = null, CancellationToken ct = default)
+    {
+        var body = await SendAsync<AuditLogPage>(
+            HttpMethod.Get, "/v1/audit" + BuildQuery(("limit", limit), ("actor", actor), ("since", since)), null, ct).ConfigureAwait(false);
+        return body.Entries;
+    }
+
     /// <summary>Where the audit log is streamed as CloudEvents, never the secret (GET /v1/audit/sink).</summary>
     public Task<JsonObject> GetAuditSinkAsync(CancellationToken ct = default) =>
         SendAsync<JsonObject>(HttpMethod.Get, "/v1/audit/sink", null, ct);

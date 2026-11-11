@@ -291,6 +291,25 @@ public sealed record ScanResult
     [JsonPropertyName("pagesScanned")] public int? PagesScanned { get; init; }
     [JsonPropertyName("cookiesFound")] public int? CookiesFound { get; init; }
     [JsonPropertyName("lastScannedAt")] public long? LastScannedAt { get; init; }
+    /// <summary>Once done: cookies the scan saw (or a visit since) that no declaration covers.</summary>
+    [JsonPropertyName("undeclared")] public IReadOnlyList<ScanUndeclared>? Undeclared { get; init; }
+    /// <summary>Once done: declarations the scan did not see and nothing has seen for staleAfterDays.</summary>
+    [JsonPropertyName("stale")] public IReadOnlyList<ScanStale>? Stale { get; init; }
+}
+
+/// <summary>A cookie a scan saw that the site has not declared.</summary>
+public sealed record ScanUndeclared
+{
+    [JsonPropertyName("name")] public string Name { get; init; } = "";
+    [JsonPropertyName("domain")] public string? Domain { get; init; }
+    [JsonPropertyName("category")] public string Category { get; init; } = "";
+}
+
+/// <summary>A declaration nothing has seen lately; <see cref="LastSeenAt"/> is null when never seen.</summary>
+public sealed record ScanStale
+{
+    [JsonPropertyName("name")] public string Name { get; init; } = "";
+    [JsonPropertyName("lastSeenAt")] public long? LastSeenAt { get; init; }
 }
 
 /// <summary>A/B banner experiment results for a single variant.</summary>
