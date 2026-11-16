@@ -268,7 +268,7 @@ public sealed class SitesResource : ResourceBase
         IReadOnlyDictionary<string, string>? purposes = null, bool dryRun = false, string? type = null, CancellationToken ct = default)
     {
         var body = new JsonObject { ["category"] = category, ["purpose"] = purpose };
-        // localStorage, sessionStorage or indexedDB declares browser storage instead of a cookie; none a cookieless processor.
+        // localStorage, sessionStorage, indexedDB or cacheStorage declares browser storage instead of a cookie; none a cookieless processor.
         if (type is not null) body["type"] = type;
         if (provider is not null) body["provider"] = provider;
         if (expiry is not null) body["expiry"] = expiry;
@@ -355,6 +355,10 @@ public sealed class SitesResource : ResourceBase
     /// <summary>Plan a provisioning run, storing nothing (POST /v1/sites/:cbid/cookies/plan) with optional <c>cookies</c>, <c>replace</c> and <c>presets</c> (vendor → params): the declarations PUT, then each preset in key order. Answers <c>dryRun, steps, declared, count, diff</c>.</summary>
     public Task<JsonObject> PlanCookiesAsync(string cbid, JsonObject? input = null, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/plan", input ?? new JsonObject(), ct);
+
+    /// <summary>Apply what <see cref="PlanCookiesAsync"/> shows, all or nothing (POST /v1/sites/:cbid/cookies/apply, the same body incl. <c>handOver</c>): stored only when every step passes; a refusal stores nothing.</summary>
+    public Task<JsonObject> ApplyCookiesAsync(string cbid, JsonObject? input = null, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/cookies/apply", input ?? new JsonObject(), ct);
 
     /// <summary>The site's own translation account (GET /v1/sites/:cbid/translation): provider, key last four and fingerprint. Never the key.</summary>
     public Task<JsonObject> TranslationAsync(string cbid, CancellationToken ct = default) =>
