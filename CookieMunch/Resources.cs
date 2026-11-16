@@ -69,6 +69,10 @@ public sealed class SitesResource : ResourceBase
     public Task<JsonObject> UnlinkPartnerAsync(string cbid, string linkId, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/partners/{CookieMunchClient.Enc(linkId)}", null, ct);
 
+    /// <summary>Fix a site link's <c>externalId</c> or <c>label</c> in place, keeping the grant (PATCH /v1/sites/:cbid/partners/:linkId).</summary>
+    public Task<JsonObject> UpdatePartnerAsync(string cbid, string linkId, JsonObject input, bool dryRun = false, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Patch, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/partners/{CookieMunchClient.Enc(linkId)}{(dryRun ? "?dryRun=1" : "")}", input, ct);
+
     /// <summary>Get a site's config (GET /v1/sites/:cbid/config).</summary>
     public Task<JsonObject> GetConfigAsync(string cbid, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/config", null, ct);

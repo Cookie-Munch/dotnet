@@ -39,4 +39,11 @@ public sealed class PartnerLinksResource : ResourceBase
     /// <summary>Revoke a partner link at once (DELETE /v1/partner_links/{id}).</summary>
     public Task<JsonObject> RevokeAsync(string id, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Delete, $"/v1/partner_links/{CookieMunchClient.Enc(id)}", null, ct);
+
+    /// <summary>
+    /// Fix a link's <c>externalId</c> or <c>label</c> in place, keeping the grant (PATCH /v1/partner_links/{id}).
+    /// <c>warnings</c> names executor keys minted for the old account.
+    /// </summary>
+    public Task<JsonObject> UpdateAsync(string id, JsonObject input, bool dryRun = false, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Patch, $"/v1/partner_links/{CookieMunchClient.Enc(id)}{(dryRun ? "?dryRun=1" : "")}", input, ct);
 }
