@@ -493,6 +493,11 @@ public sealed class FulfillmentResource : ResourceBase
         Client.SendAsync<JsonObject>(HttpMethod.Post,
             $"/v1/dsar/{CookieMunchClient.Enc(requestId)}/tasks/{CookieMunchClient.Enc(taskId)}/approve", null, ct);
 
+    /// <summary>Send a failed task again once its system is fixed (POST /v1/dsar/{id}/tasks/{taskId}/retry). Audited.</summary>
+    public Task<JsonObject> RetryTaskAsync(string requestId, string taskId, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post,
+            $"/v1/dsar/{CookieMunchClient.Enc(requestId)}/tasks/{CookieMunchClient.Enc(taskId)}/retry", null, ct);
+
     /// <summary>Refuse it (POST /v1/dsar/{id}/tasks/{taskId}/reject): nothing is sent, the task fails with <paramref name="reason"/>. Audited.</summary>
     public Task<JsonObject> RejectTaskAsync(string requestId, string taskId, string? reason = null, CancellationToken ct = default)
     {
