@@ -798,6 +798,25 @@ public sealed class KeysResource : ResourceBase
     public Task RevokeAsync(string prefix, CancellationToken ct = default) =>
         Client.SendAsync(HttpMethod.Delete, $"/v1/keys/{CookieMunchClient.Enc(prefix)}", null, ct);
 
+    /// <summary>Account key (<c>orgs:keys</c>): another org's key prefixes (GET /v1/orgs/:orgId/keys).</summary>
+    public Task<List<ApiKey>> ListInOrgAsync(string orgId, CancellationToken ct = default) =>
+        Client.SendAsync<List<ApiKey>>(HttpMethod.Get, $"/v1/orgs/{CookieMunchClient.Enc(orgId)}/keys", null, ct);
+
+    /// <summary>
+    /// Account key (<c>orgs:keys</c>): mint a scoped key in another org of the same account
+    /// (POST /v1/orgs/:orgId/keys). <c>input.Scopes</c> is required; the <see cref="ApiKey.Key"/> is returned ONCE.
+    /// </summary>
+    public Task<ApiKey> CreateInOrgAsync(string orgId, ApiKeyIssueInput input, CancellationToken ct = default) =>
+        Client.SendAsync<ApiKey>(HttpMethod.Post, $"/v1/orgs/{CookieMunchClient.Enc(orgId)}/keys", input, ct);
+
+    /// <summary>Account key (<c>orgs:keys</c>): update a key in another org (PATCH /v1/orgs/:orgId/keys/:prefix).</summary>
+    public Task<JsonObject> UpdateInOrgAsync(string orgId, string prefix, ApiKeyUpdate patch, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Patch, $"/v1/orgs/{CookieMunchClient.Enc(orgId)}/keys/{CookieMunchClient.Enc(prefix)}", patch, ct);
+
+    /// <summary>Account key (<c>orgs:keys</c>): revoke a key in another org (DELETE /v1/orgs/:orgId/keys/:prefix). Immediate.</summary>
+    public Task RevokeInOrgAsync(string orgId, string prefix, CancellationToken ct = default) =>
+        Client.SendAsync(HttpMethod.Delete, $"/v1/orgs/{CookieMunchClient.Enc(orgId)}/keys/{CookieMunchClient.Enc(prefix)}", null, ct);
+
     /// <summary>
     /// Rotate a key (POST /v1/keys/:prefix/roll). The new <see cref="ApiKey.Key"/> is returned
     /// ONCE and keeps the old key's name, scopes, property lock and expiry; the old secret stops
