@@ -446,6 +446,41 @@ public sealed class SitesResource : ResourceBase
     public Task<JsonObject> AnalyzeSessionAsync(string cbid, SessionAnalysisInput input, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/sentry", input, ct);
 
+    /// <summary>Move the site to a new domain (POST /v1/sites/:cbid/move): every stored value naming the old host,
+    /// rewritten. <paramref name="input"/> takes <c>to</c> (required), <c>from</c>, <c>keepOld</c>, <c>trustOldDays</c>.
+    /// After a refusal, send <c>retry.body</c> again: what moved is skipped.</summary>
+    public Task<JsonObject> MoveAsync(string cbid, JsonObject input, bool dryRun = false, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/move{(dryRun ? "?dryRun=1" : "")}", input, ct);
+
+    /// <summary>A tenant: a site for one of your customers, the controller for its own visitors (POST /v1/sites/:cbid/tenants). Idempotent by externalId.</summary>
+    public Task<JsonObject> CreateTenantAsync(string parentCbid, JsonObject tenant, bool dryRun = false, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(parentCbid)}/tenants{(dryRun ? "?dryRun=1" : "")}", tenant, ct);
+
+    /// <summary>Up to 100 tenants; send the same list again to resume (POST /v1/sites/:cbid/tenants/bulk).</summary>
+    public Task<JsonObject> CreateTenantsBulkAsync(string parentCbid, JsonArray tenants, bool dryRun = false, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Post, $"/v1/sites/{CookieMunchClient.Enc(parentCbid)}/tenants/bulk{(dryRun ? "?dryRun=1" : "")}", new JsonObject { ["tenants"] = tenants }, ct);
+
+    /// <summary>One page { tenants, nextCursor, total } (GET /v1/sites/:cbid/tenants).</summary>
+    public Task<JsonObject> ListTenantsAsync(string parentCbid, int? limit = null, string? cursor = null, CancellationToken ct = default)
+    {
+        var q = new List<string>();
+        if (limit is int l) q.Add($"limit={l}");
+        if (!string.IsNullOrEmpty(cursor)) q.Add($"cursor={Uri.EscapeDataString(cursor)}");
+        return Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(parentCbid)}/tenants{(q.Count > 0 ? "?" + string.Join("&", q) : "")}", null, ct);
+    }
+
+    /// <summary>One tenant by your id for the customer (GET /v1/sites/:cbid/tenants/:externalId).</summary>
+    public Task<JsonObject> GetTenantAsync(string parentCbid, string externalId, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(parentCbid)}/tenants/{CookieMunchClient.Enc(externalId)}", null, ct);
+
+    /// <summary>Change a tenant's name, path or controller (PATCH /v1/sites/:cbid/tenants/:externalId).</summary>
+    public Task<JsonObject> UpdateTenantAsync(string parentCbid, string externalId, JsonObject patch, bool dryRun = false, CancellationToken ct = default) =>
+        Client.SendAsync<JsonObject>(new HttpMethod("PATCH"), $"/v1/sites/{CookieMunchClient.Enc(parentCbid)}/tenants/{CookieMunchClient.Enc(externalId)}{(dryRun ? "?dryRun=1" : "")}", patch, ct);
+
+    /// <summary>Delete a tenant and everything its site holds (DELETE /v1/sites/:cbid/tenants/:externalId). Irreversible.</summary>
+    public Task DeleteTenantAsync(string parentCbid, string externalId, bool dryRun = false, CancellationToken ct = default) =>
+        Client.SendAsync(HttpMethod.Delete, $"/v1/sites/{CookieMunchClient.Enc(parentCbid)}/tenants/{CookieMunchClient.Enc(externalId)}{(dryRun ? "?dryRun=1" : "")}", null, ct);
+
     /// <summary>Exactly what to publish to prove control of the domain, per method (GET /v1/sites/:cbid/verify/challenge).</summary>
     public Task<JsonObject> VerifyChallengeAsync(string cbid, CancellationToken ct = default) =>
         Client.SendAsync<JsonObject>(HttpMethod.Get, $"/v1/sites/{CookieMunchClient.Enc(cbid)}/verify/challenge", null, ct);
